@@ -1,0 +1,14 @@
+target/
+.mvn/wrapper/maven-wrapper.jar
+*.iml
+.idea/
+.vscode/
+.claude/settings.local.json
+.DS_Store
+*.log
+HELP.md
+
+# Don't commit secrets
+.env
+.env.local
+application-local.yml

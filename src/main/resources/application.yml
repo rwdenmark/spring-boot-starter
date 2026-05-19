@@ -1,0 +1,44 @@
+spring:
+  application:
+    name: starter
+
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/starter}
+    username: ${DATABASE_USER:postgres}
+    password: ${DATABASE_PASSWORD:postgres}
+
+  jpa:
+    hibernate:
+      # 'validate' checks entities match schema; Flyway owns the schema
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+
+  # Enable virtual threads (Java 21+). Free concurrency for I/O-bound work.
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+
+logging:
+  level:
+    root: INFO
+    com.example.starter: DEBUG
+    org.springframework.security: INFO
