@@ -42,3 +42,6 @@ logging:
     root: INFO
     com.example.starter: INFO
     org.springframework.security: INFO
+
+app:
+  greeting: "hello from default config"
