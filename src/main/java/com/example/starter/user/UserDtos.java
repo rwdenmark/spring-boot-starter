@@ -17,6 +17,10 @@ public class UserDtos {
             @NotBlank @Size(min = 8, max = 100) String password
     ) {}
 
+    public record UpdateUserRequest(
+            @NotBlank @Size(min = 1, max = 255) String name
+    ) {}
+
     public record UserResponse(
             Long id,
             String email,

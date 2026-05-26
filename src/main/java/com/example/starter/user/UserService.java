@@ -2,6 +2,7 @@ package com.example.starter.user;
 
 import com.example.starter.common.NotFoundException;
 import com.example.starter.user.UserDtos.CreateUserRequest;
+import com.example.starter.user.UserDtos.UpdateUserRequest;
 import com.example.starter.user.UserDtos.UserResponse;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -32,6 +33,19 @@ public class UserService {
                 passwordEncoder.encode(request.password())
         );
         return UserResponse.from(userRepository.save(user));
+    }
+
+    public UserResponse update(Long id, UpdateUserRequest request) {
+        var user = userRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("User not found: " + id));
+        user.setName(request.name());
+        return UserResponse.from(userRepository.save(user));
+    }
+
+    public void delete(Long id) {
+        var user = userRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("User not found: " + id));
+        userRepository.delete(user);
     }
 
     @Transactional(readOnly = true)
