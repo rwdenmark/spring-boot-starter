@@ -1,0 +1,20 @@
+### List all users
+GET http://localhost:8080/api/users
+Accept: application/json
+
+### Get one user by id
+GET http://localhost:8080/api/users/1
+Accept: application/json
+
+### Health check
+GET http://localhost:8080/actuator/health
+
+### Create a user (POST)
+POST http://localhost:8080/api/users
+Content-Type: application/json
+
+{
+  "email": "carol@example.com",
+  "name": "Carol",
+  "password": "supersecret"
+}

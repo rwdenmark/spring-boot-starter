@@ -40,5 +40,5 @@ management:
 logging:
   level:
     root: INFO
-    com.example.starter: DEBUG
+    com.example.starter: INFO
     org.springframework.security: INFO
