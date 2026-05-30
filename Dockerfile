@@ -1,5 +1,5 @@
 # --- Build stage ---
-FROM eclipse-temurin:21-jdk-alpine AS build
+FROM eclipse-temurin:25-jdk-alpine AS build
 WORKDIR /app
 
 # Cache dependencies first (faster rebuilds)
@@ -11,7 +11,7 @@ COPY src src
 RUN ./mvnw package -DskipTests -B
 
 # --- Runtime stage ---
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:25-jre-alpine
 WORKDIR /app
 
 # Run as non-root
