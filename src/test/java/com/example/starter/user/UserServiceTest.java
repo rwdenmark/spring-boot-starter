@@ -12,7 +12,6 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,10 +20,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-/**
- * Fast unit tests — no Spring context, no database. Service logic only.
- * Repository and password encoder are mocked.
- */
 @ExtendWith(MockitoExtension.class)
 class UserServiceTest {
 

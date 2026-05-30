@@ -18,12 +18,6 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
-/**
- * End-to-end integration test against a real Postgres in Docker.
- * No mocks for the database. Authenticated requests use @WithMockUser to
- * bypass HTTP Basic — the auth filter chain itself is exercised in
- * {@link UserControllerTest}.
- */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers
@@ -113,10 +107,10 @@ class UserControllerIT {
     void getAllUsers_returnsPagedResult() throws Exception {
         createUser("a@example.com", "A");
         createUser("b@example.com", "B");
+        // AdminBootstrap seeds one admin at startup; the test adds two more.
         mockMvc.perform(get("/api/users"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.content.length()").value(2))
-                .andExpect(jsonPath("$.totalElements").value(2));
+                .andExpect(jsonPath("$.totalElements").value(3));
     }
 
     @Test
@@ -127,7 +121,9 @@ class UserControllerIT {
         mockMvc.perform(patch("/api/users/{id}", id)
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""{"name":"Alice Updated"}"""))
+                        .content("""
+                                {"name":"Alice Updated"}
+                                """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Alice Updated"))
                 .andExpect(jsonPath("$.email").value("alice@example.com"));
@@ -139,7 +135,9 @@ class UserControllerIT {
         mockMvc.perform(patch("/api/users/{id}", 999_999_999L)
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("""{"name":"Whatever"}"""))
+                        .content("""
+                                {"name":"Whatever"}
+                                """))
                 .andExpect(status().isNotFound());
     }
 

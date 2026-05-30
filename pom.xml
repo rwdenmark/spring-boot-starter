@@ -15,47 +15,36 @@
     <artifactId>starter</artifactId>
     <version>0.0.1-SNAPSHOT</version>
     <name>starter</name>
-    <description>Modern Spring Boot starter</description>
+    <description>Spring Boot starter</description>
 
     <properties>
         <java.version>21</java.version>
-        <!-- Override Spring Boot 3.4.1's pinned 1.20.4; newer docker-java is
-             required to talk to Docker Engine 29+ (API 1.54). -->
+        <!-- Override Spring Boot 3.4.1's pinned 1.20.4; needed for Docker Engine 29+ (API 1.54). -->
         <testcontainers.version>1.21.4</testcontainers.version>
     </properties>
 
     <dependencies>
-        <!-- Web layer: REST controllers, JSON, embedded Tomcat -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
-
-        <!-- Persistence: JPA + Hibernate -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
-
-        <!-- Bean validation (@Valid, @NotBlank, etc.) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
-
-        <!-- Security: auth, password encoding, filter chain -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
-
-        <!-- Production-ready endpoints: /actuator/health, /metrics, etc. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
-        <!-- Database migrations -->
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
@@ -65,21 +54,30 @@
             <artifactId>flyway-database-postgresql</artifactId>
         </dependency>
 
-        <!-- Postgres driver -->
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Metrics export to Prometheus format -->
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-registry-prometheus</artifactId>
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Testing -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.7.0</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j_jdk17-core</artifactId>
+            <version>8.14.0</version>
+        </dependency>
+
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
@@ -90,8 +88,6 @@
             <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
-
-        <!-- Testcontainers: real Postgres in Docker for integration tests -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-testcontainers</artifactId>
@@ -116,8 +112,7 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
 
-            <!-- Resolves dependency jar paths into properties, e.g.
-                 ${org.mockito:mockito-core:jar} used by surefire below. -->
+            <!-- Resolves dependency jar paths into properties so surefire can reference mockito-core. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-dependency-plugin</artifactId>
@@ -128,13 +123,29 @@
                 </executions>
             </plugin>
 
-            <!-- Declare Mockito as an explicit -javaagent (Java 21+ deprecates
-                 dynamic agent loading); -Xshare:off silences the CDS warning. -->
+            <!-- Java 21+ deprecates dynamic agent loading; declare Mockito as a -javaagent. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <argLine>-javaagent:${org.mockito:mockito-core:jar} -Xshare:off</argLine>
+                </configuration>
+            </plugin>
+
+            <!-- Run manually: ./mvnw spotless:apply or ./mvnw spotless:check -->
+            <plugin>
+                <groupId>com.diffplug.spotless</groupId>
+                <artifactId>spotless-maven-plugin</artifactId>
+                <version>2.43.0</version>
+                <configuration>
+                    <java>
+                        <removeUnusedImports/>
+                        <importOrder>
+                            <order>java,jakarta,javax,org,com,</order>
+                        </importOrder>
+                        <trimTrailingWhitespace/>
+                        <endWithNewline/>
+                    </java>
                 </configuration>
             </plugin>
         </plugins>

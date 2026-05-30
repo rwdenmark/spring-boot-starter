@@ -8,9 +8,6 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.stream.Collectors;
 
-/**
- * Uses ProblemDetail (RFC 7807) - the modern Spring way to return error responses.
- */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 

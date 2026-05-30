@@ -1,63 +1,69 @@
-# Modern Spring Boot Starter
+# Spring Boot Starter
 
-A reference project for someone modernizing from older Java/Apache stacks. Hits every layer you'll need to know.
+A reference Spring Boot service that hits the common layers — auth, persistence, migrations, observability, tests, container, CI.
 
-## What's in here
+## Stack
 
-- **Spring Boot 3.4** on **Java 21**
-- **PostgreSQL** with **Flyway** migrations
-- **Spring Data JPA** for persistence
-- **Spring Security 6** (modern `SecurityFilterChain` style, HTTP Basic backed by the user DB)
-- **Bean validation** with Jakarta annotations
-- **RFC 7807 problem details** for error responses
-- **Actuator + Micrometer + Prometheus** for observability
-- **Virtual threads** enabled (Java 21 feature)
-- **Testcontainers** for integration tests against real Postgres
-- **Multi-stage Dockerfile** producing a small non-root image
-- **GitHub Actions** CI workflow
-- **Docker Compose** for local Postgres
+- Spring Boot 3.4 on Java 21
+- PostgreSQL + Flyway
+- Spring Data JPA
+- Spring Security 6 (HTTP Basic, user DB-backed)
+- CORS, springdoc OpenAPI
+- Bucket4j rate limiting on the registration endpoint
+- JSON structured logging under the `prod` profile
+- Actuator + Micrometer Prometheus, readiness/liveness probes
+- Virtual threads
+- Testcontainers integration tests
+- Multi-stage Dockerfile (non-root)
+- GitHub Actions CI, Dependabot
+- Spotless (opt-in: `./mvnw spotless:apply`)
 
 ## File tour
 
 ```
 spring-starter/
-├── pom.xml                              # Dependencies (Maven)
-├── Dockerfile                           # Multi-stage build, non-root runtime
-├── compose.yml                          # Local Postgres
-├── .github/workflows/ci.yml             # CI pipeline
+├── pom.xml
+├── Dockerfile
+├── compose.yml
+├── .env.example
+├── .github/
+│   ├── workflows/ci.yml
+│   └── dependabot.yml
 └── src/
     ├── main/
     │   ├── java/com/example/starter/
-    │   │   ├── StarterApplication.java          # @SpringBootApplication entry point
+    │   │   ├── StarterApplication.java
     │   │   ├── config/
-    │   │   │   ├── AppProperties.java           # @ConfigurationProperties for `app.*`
-    │   │   │   └── SecurityConfig.java          # SecurityFilterChain bean
+    │   │   │   ├── AppProperties.java
+    │   │   │   ├── SecurityConfig.java
+    │   │   │   ├── RequestLoggingConfig.java
+    │   │   │   └── RateLimitingFilter.java
     │   │   ├── common/
     │   │   │   ├── NotFoundException.java
-    │   │   │   └── GlobalExceptionHandler.java  # @RestControllerAdvice
+    │   │   │   └── GlobalExceptionHandler.java
     │   │   ├── greeting/
-    │   │   │   └── GreetingController.java      # Example endpoint reading config
+    │   │   │   └── GreetingController.java
     │   │   └── user/
-    │   │       ├── User.java                    # JPA entity (password JsonIgnored)
-    │   │       ├── UserRepository.java          # Spring Data interface
-    │   │       ├── CreateUserRequest.java       # POST payload
-    │   │       ├── UpdateUserRequest.java       # PATCH payload (optional fields)
-    │   │       ├── UserResponse.java            # API response DTO
-    │   │       ├── UserService.java             # Business logic
-    │   │       ├── UserController.java          # REST endpoints
-    │   │       └── JpaUserDetailsService.java   # Spring Security auth source
+    │   │       ├── User.java
+    │   │       ├── UserRepository.java
+    │   │       ├── CreateUserRequest.java
+    │   │       ├── UpdateUserRequest.java
+    │   │       ├── UserResponse.java
+    │   │       ├── UserService.java
+    │   │       ├── UserController.java
+    │   │       ├── JpaUserDetailsService.java
+    │   │       └── AdminBootstrap.java
     │   └── resources/
-    │       ├── application.yml                  # Config (no XML)
-    │       ├── application-dev.yml              # Dev-profile overrides
-    │       └── db/migration/
-    │           └── V1__create_users_table.sql   # Flyway migration
+    │       ├── application.yml
+    │       ├── application-dev.yml
+    │       ├── application-prod.yml
+    │       └── db/migration/V1__create_users_table.sql
     └── test/
         └── java/com/example/starter/
-            ├── greeting/GreetingControllerTest.java   # @WebMvcTest slice
+            ├── greeting/GreetingControllerIT.java
             └── user/
-                ├── UserServiceTest.java               # Mockito unit tests
-                ├── UserControllerTest.java            # @WebMvcTest slice
-                └── UserControllerIT.java              # Real Postgres via Testcontainers
+                ├── UserServiceTest.java
+                └── UserControllerIT.java
 ```
 
 ## API
@@ -67,72 +73,96 @@ spring-starter/
 | POST   | /api/users       | public        | Register a new user                      |
 | GET    | /api/users       | authenticated | Paginated list (`?page=0&size=20`)       |
 | GET    | /api/users/{id}  | authenticated | Get one user                             |
-| PATCH  | /api/users/{id}  | authenticated | Partial update (any subset of fields)    |
-| DELETE | /api/users/{id}  | ADMIN role    | Delete a user                            |
-| GET    | /api/greeting    | public        | Returns the configured greeting          |
+| PATCH  | /api/users/{id}  | authenticated | Partial update                           |
+| DELETE | /api/users/{id}  | ADMIN         | Delete a user                            |
+| GET    | /api/greeting    | public        | Configured greeting                      |
+| GET    | /swagger-ui.html | public        | OpenAPI / Swagger UI                     |
+
+## Configuration
+
+| Variable                  | Default                                                              |
+|---------------------------|----------------------------------------------------------------------|
+| `DATABASE_URL`            | `jdbc:postgresql://localhost:5432/starter`                           |
+| `DATABASE_USER`           | `postgres`                                                           |
+| `DATABASE_PASSWORD`       | `postgres`                                                           |
+| `PORT`                    | `8080`                                                               |
+| `ADMIN_EMAIL`             | `admin@example.com`                                                  |
+| `ADMIN_PASSWORD`          | `changeme` (warns at startup if unchanged)                           |
+| `CORS_ALLOWED_ORIGINS`    | `http://localhost:3000,http://localhost:5173,http://localhost:8080`  |
+| `RATE_LIMIT_REGISTRATION` | `100` (per-IP, per minute, on POST /api/users)                       |
+| `BCRYPT_STRENGTH`         | `10`                                                                 |
+| `SPRING_PROFILES_ACTIVE`  | unset; set to `prod` for JSON logs and tighter actuator              |
 
 ## Running locally
 
-You need Java 21 (`brew install openjdk@21` on macOS, or use SDKMAN) and Docker.
+Requires Java 21 and Docker.
 
 ```bash
-# Start Postgres
 docker compose up -d
-
-# Run the app (generates the Maven wrapper on first run if needed)
 ./mvnw spring-boot:run
 ```
 
-App is on http://localhost:8080.
-
-### Try it
+App on http://localhost:8080. Swagger UI at /swagger-ui.html.
 
 ```bash
-# Register a user
 curl -X POST http://localhost:8080/api/users \
   -H 'Content-Type: application/json' \
   -d '{"email":"alice@example.com","name":"Alice","password":"supersecret"}'
 
-# List users (auth required)
-curl -u alice@example.com:supersecret http://localhost:8080/api/users
-
-# Greeting (public)
+curl -u admin@example.com:changeme http://localhost:8080/api/users
+curl -u admin@example.com:changeme -X DELETE http://localhost:8080/api/users/1
 curl http://localhost:8080/api/greeting
-
-# Health check
 curl http://localhost:8080/actuator/health
 ```
 
 ## Building a container
-
-Spring Boot's buildpack support means **no Dockerfile needed** (though one is included for reference):
 
 ```bash
 ./mvnw spring-boot:build-image -DskipTests
 docker run -p 8080:8080 starter:0.0.1-SNAPSHOT
 ```
 
-Or with the included Dockerfile:
+Or with the included Dockerfile: `docker build -t starter .`
 
-```bash
-docker build -t starter .
-```
-
-## Running tests
+## Tests
 
 ```bash
 ./mvnw test
 ```
 
-Unit and slice tests run in milliseconds. Integration tests spin up real Postgres via Testcontainers (needs Docker running).
+`UserServiceTest` runs in milliseconds (Mockito). The two `*IT` classes spin up real Postgres via Testcontainers — Docker must be running.
 
 ## Deploying
 
-The fastest path to "running on the internet":
-
 ```bash
-# Fly.io (recommended for first deployment)
 brew install flyctl
-fly launch        # reads the Dockerfile, sets up Postgres, gets you a URL
+fly launch
 fly deploy
 ```
+
+Set the env vars from `.env.example` in your platform's secrets UI.
+
+## Using this as a template
+
+1. Rename `com.example.starter` and `starter` to your package and project. Search-and-replace covers `pom.xml`, every `package` line, and every `import`.
+2. Replace `V1__create_users_table.sql` with your domain's first migration. Drop the `user/` and `greeting/` packages — they're examples.
+3. Keep `config/`, `common/`, `AdminBootstrap`, and the test setup.
+4. Copy `.env.example` to `.env`, fill in real values.
+5. Rewrite this README for your project.
+
+## Moving to production
+
+HTTP Basic is in here so you can hit the API with `curl -u` on day one. For production, swap for JWT/OAuth2:
+
+1. Add `spring-boot-starter-oauth2-resource-server`.
+2. In `SecurityConfig`, replace `.httpBasic(Customizer.withDefaults())` with `.oauth2ResourceServer(o -> o.jwt(Customizer.withDefaults()))`.
+3. Set `spring.security.oauth2.resourceserver.jwt.issuer-uri` (or `jwk-set-uri`).
+4. Add a token-issuing endpoint or use your issuer's.
+5. Drop `JpaUserDetailsService` if your issuer owns the user store.
+
+Other gaps to close before going public:
+
+- **Distributed rate limiting.** Bucket4j uses in-process buckets — fine for one node. Multi-node needs `bucket4j-redis` or a gateway.
+- **Secrets management.** Source `ADMIN_PASSWORD` and `DATABASE_PASSWORD` from a secrets manager.
+- **`/actuator/prometheus`** is dropped from the public exposure under `prod`. Re-expose it on the management port and scrape it there.
+- **TLS** terminates at your load balancer or reverse proxy — the embedded Tomcat here is HTTP-only.

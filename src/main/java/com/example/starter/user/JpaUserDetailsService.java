@@ -6,10 +6,6 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
-/**
- * Loads Spring Security UserDetails from the user table. The email column is
- * the principal name. SecurityFilterChain uses this for HTTP Basic auth.
- */
 @Service
 public class JpaUserDetailsService implements UserDetailsService {
 

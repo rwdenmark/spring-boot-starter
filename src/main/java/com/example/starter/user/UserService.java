@@ -36,10 +36,7 @@ public class UserService {
             log.info("Created user {} (email {})", saved.getId(), saved.getEmail());
             return UserResponse.from(saved);
         } catch (DataIntegrityViolationException ex) {
-            // Email uniqueness is enforced by the DB unique constraint. Catching
-            // here (rather than pre-checking with existsByEmail) avoids the race
-            // where two concurrent requests both pass a pre-check before either
-            // inserts.
+            // Rely on the DB unique constraint rather than a pre-check to avoid races
             log.warn("Email already in use: {}", request.email());
             throw new IllegalArgumentException("Email already in use");
         }

@@ -45,7 +45,7 @@ public class User {
         this.updatedAt = Instant.now();
     }
 
-    protected User() {} // JPA requires a no-arg constructor
+    protected User() {}
 
     public User(String email, String name, String password) {
         this.email = email;
@@ -64,10 +64,6 @@ public class User {
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
 
-    /**
-     * Email changes are a domain event (uniqueness check, possible re-verification, audit).
-     * Force callers through a deliberate method rather than a setter.
-     */
     public void changeEmail(String newEmail) {
         this.email = newEmail;
     }

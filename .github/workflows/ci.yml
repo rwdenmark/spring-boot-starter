@@ -21,7 +21,3 @@ jobs:
 
       - name: Run tests
         run: ./mvnw verify -B
-
-      - name: Build container image
-        if: github.ref == 'refs/heads/main'
-        run: ./mvnw spring-boot:build-image -DskipTests -B

@@ -1,15 +1,4 @@
-### List all users
-GET http://localhost:8080/api/users
-Accept: application/json
-
-### Get one user by id
-GET http://localhost:8080/api/users/1
-Accept: application/json
-
-### Health check
-GET http://localhost:8080/actuator/health
-
-### Create a user (POST)
+### Public — register a new user
 POST http://localhost:8080/api/users
 Content-Type: application/json
 
@@ -18,3 +7,47 @@ Content-Type: application/json
   "name": "Carol",
   "password": "supersecret"
 }
+
+### Public — greeting
+GET http://localhost:8080/api/greeting
+
+### Public — health
+GET http://localhost:8080/actuator/health
+
+### Authenticated — list users (paginated)
+GET http://localhost:8080/api/users?page=0&size=10
+Authorization: Basic admin@example.com changeme
+Accept: application/json
+
+### Authenticated — get one user by id
+GET http://localhost:8080/api/users/1
+Authorization: Basic admin@example.com changeme
+Accept: application/json
+
+### Authenticated — PATCH (partial update)
+PATCH http://localhost:8080/api/users/1
+Authorization: Basic admin@example.com changeme
+Content-Type: application/json
+
+{
+  "name": "Carol Renamed"
+}
+
+### Authenticated — PATCH email
+PATCH http://localhost:8080/api/users/1
+Authorization: Basic admin@example.com changeme
+Content-Type: application/json
+
+{
+  "email": "carol.new@example.com"
+}
+
+### ADMIN only — delete a user
+DELETE http://localhost:8080/api/users/1
+Authorization: Basic admin@example.com changeme
+
+### Public — Swagger UI
+GET http://localhost:8080/swagger-ui.html
+
+### Public — OpenAPI JSON
+GET http://localhost:8080/v3/api-docs
