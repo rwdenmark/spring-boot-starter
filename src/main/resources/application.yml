@@ -17,7 +17,9 @@ spring:
 
   flyway:
     enabled: true
-    baseline-on-migrate: true
+    # Default is false — a fresh schema should start at V1. Only flip to true
+    # when introducing Flyway to a legacy DB that already has tables.
+    baseline-on-migrate: false
 
   # Enable virtual threads (Java 21+). Free concurrency for I/O-bound work.
   threads:

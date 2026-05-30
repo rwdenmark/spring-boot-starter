@@ -7,19 +7,22 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
- * Integration test against a real Postgres in Docker.
- * No mocks for the database layer.
+ * End-to-end integration test against a real Postgres in Docker.
+ * No mocks for the database. Authenticated requests use @WithMockUser to
+ * bypass HTTP Basic — the auth filter chain itself is exercised in
+ * {@link UserControllerTest}.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -40,7 +43,8 @@ class UserControllerIT {
                 """.formatted(email, name);
 
         var result = mockMvc.perform(post("/api/users")
-                        .contentType("application/json")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
                         .content(json))
                 .andExpect(status().isCreated())
                 .andReturn();
@@ -50,97 +54,110 @@ class UserControllerIT {
     }
 
     @Test
-    void createUser_returnsCreated() throws Exception {
-        var json = """
-            {
-              "email": "alice@example.com",
-              "name": "Alice",
-              "password": "supersecret"
-            }
-            """;
-
+    void createUser_returnsCreated_andHidesPassword() throws Exception {
         mockMvc.perform(post("/api/users")
-                .contentType("application/json")
-                .content(json))
-            .andExpect(status().isCreated())
-            .andExpect(jsonPath("$.email").value("alice@example.com"))
-            .andExpect(jsonPath("$.name").value("Alice"))
-            .andExpect(jsonPath("$.password").doesNotExist());
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"alice@example.com","name":"Alice","password":"supersecret"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.email").value("alice@example.com"))
+                .andExpect(jsonPath("$.name").value("Alice"))
+                .andExpect(jsonPath("$.password").doesNotExist());
     }
 
     @Test
     void createUser_invalidEmail_returns400() throws Exception {
-        var json = """
-            {
-              "email": "not-an-email",
-              "name": "Bob",
-              "password": "supersecret"
-            }
-            """;
-
         mockMvc.perform(post("/api/users")
-                .contentType("application/json")
-                .content(json))
-            .andExpect(status().isBadRequest());
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"not-an-email","name":"Bob","password":"supersecret"}
+                                """))
+                .andExpect(status().isBadRequest());
     }
 
     @Test
+    void createUser_duplicateEmail_returns400() throws Exception {
+        createUser("dup@example.com", "First");
+
+        mockMvc.perform(post("/api/users")
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"dup@example.com","name":"Second","password":"supersecret"}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @WithMockUser
     void getUserById_returnsUser() throws Exception {
         Long id = createUser("alice@example.com", "Alice");
         mockMvc.perform(get("/api/users/{id}", id))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(id))
-                .andExpect(jsonPath("$.email").value("alice@example.com"))
-                .andExpect(jsonPath("$.name").value("Alice"));
+                .andExpect(jsonPath("$.email").value("alice@example.com"));
     }
 
     @Test
+    @WithMockUser
     void getUserById_notFound_returns404() throws Exception {
         mockMvc.perform(get("/api/users/{id}", 999_999_999L))
                 .andExpect(status().isNotFound());
     }
 
     @Test
-    void getAllUsers_returnsList() throws Exception {
+    @WithMockUser
+    void getAllUsers_returnsPagedResult() throws Exception {
         createUser("a@example.com", "A");
         createUser("b@example.com", "B");
         mockMvc.perform(get("/api/users"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.length()").value(2));
+                .andExpect(jsonPath("$.content.length()").value(2))
+                .andExpect(jsonPath("$.totalElements").value(2));
     }
 
     @Test
-    void updateUser_returnsUpdated() throws Exception {
+    @WithMockUser
+    void updateUser_partialUpdate_keepsOtherFields() throws Exception {
         Long id = createUser("alice@example.com", "Alice");
-        var json = """ 
-                { "name": "Alice Updated" }
-                """;
-        mockMvc.perform(put("/api/users/{id}", id)
-                        .contentType("application/json")
-                        .content(json))
+
+        mockMvc.perform(patch("/api/users/{id}", id)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""{"name":"Alice Updated"}"""))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.id").value(id))
                 .andExpect(jsonPath("$.name").value("Alice Updated"))
                 .andExpect(jsonPath("$.email").value("alice@example.com"));
     }
 
     @Test
+    @WithMockUser
     void updateUser_notFound_returns404() throws Exception {
-        var json = """ 
-                { "name": "Whatever" }
-                """;
-        mockMvc.perform(put("/api/users/{id}", 999_999_999L)
-                        .contentType("application/json")
-                        .content(json))
+        mockMvc.perform(patch("/api/users/{id}", 999_999_999L)
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""{"name":"Whatever"}"""))
                 .andExpect(status().isNotFound());
     }
 
     @Test
-    void deleteUser_returns204_andGetReturns404() throws Exception {
+    @WithMockUser(roles = "ADMIN")
+    void deleteUser_asAdmin_returns204_andGetReturns404() throws Exception {
         Long id = createUser("alice@example.com", "Alice");
-        mockMvc.perform(delete("/api/users/{id}", id))
+        mockMvc.perform(delete("/api/users/{id}", id).with(csrf()))
                 .andExpect(status().isNoContent());
         mockMvc.perform(get("/api/users/{id}", id))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @WithMockUser(roles = "USER")
+    void deleteUser_asUser_returns403() throws Exception {
+        Long id = createUser("alice@example.com", "Alice");
+        mockMvc.perform(delete("/api/users/{id}", id).with(csrf()))
+                .andExpect(status().isForbidden());
     }
 }

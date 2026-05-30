@@ -1,15 +1,14 @@
 package com.example.starter.user;
 
-import com.example.starter.user.UserDtos.CreateUserRequest;
-import com.example.starter.user.UserDtos.UpdateUserRequest;
-import com.example.starter.user.UserDtos.UserResponse;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/users")
@@ -22,7 +21,6 @@ public class UserController {
     }
 
     @PostMapping
-    @ResponseStatus(HttpStatus.CREATED)
     public ResponseEntity<UserResponse> create(@Valid @RequestBody CreateUserRequest request) {
         var created = userService.create(request);
         return ResponseEntity
@@ -30,7 +28,7 @@ public class UserController {
                 .body(created);
     }
 
-    @PutMapping("/{id}")
+    @PatchMapping("/{id}")
     public UserResponse update(@PathVariable Long id,
                                @Valid @RequestBody UpdateUserRequest request) {
         return userService.update(id, request);
@@ -48,7 +46,7 @@ public class UserController {
     }
 
     @GetMapping
-    public List<UserResponse> findAll() {
-        return userService.findAll();
+    public Page<UserResponse> findAll(@PageableDefault(size = 20) Pageable pageable) {
+        return userService.findAll(pageable);
     }
 }

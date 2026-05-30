@@ -1,25 +1,24 @@
 package com.example.starter.greeting;
 
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.web.bind.annotation.*;
+import com.example.starter.config.AppProperties;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
 import java.util.Map;
 
 @RestController
 @RequestMapping("/api/greeting")
-@EnableConfigurationProperties(GreetingController.AppProperties.class)
 public class GreetingController {
-    private final String greeting;
 
-    @ConfigurationProperties(prefix = "app")
-    public record AppProperties(String greeting) {}
+    private final AppProperties props;
 
     public GreetingController(AppProperties props) {
-        this.greeting = props.greeting();
+        this.props = props;
     }
 
     @GetMapping
     public Map<String, String> greet() {
-        return Map.of("message", greeting);
+        return Map.of("message", props.greeting());
     }
 }

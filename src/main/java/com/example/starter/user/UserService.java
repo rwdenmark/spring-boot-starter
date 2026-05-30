@@ -1,19 +1,16 @@
 package com.example.starter.user;
 
 import com.example.starter.common.NotFoundException;
-import com.example.starter.user.UserDtos.CreateUserRequest;
-import com.example.starter.user.UserDtos.UpdateUserRequest;
-import com.example.starter.user.UserDtos.UserResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
-
 @Service
-@Transactional
 public class UserService {
 
     private static final Logger log = LoggerFactory.getLogger(UserService.class);
@@ -26,20 +23,26 @@ public class UserService {
         this.passwordEncoder = passwordEncoder;
     }
 
+    @Transactional
     public UserResponse create(CreateUserRequest request) {
         log.info("Creating user with email {}", request.email());
-        if (userRepository.existsByEmail(request.email())) {
-            log.warn("Email already in use: {}", request.email());
-            throw new IllegalArgumentException("Email already in use");
-        }
         var user = new User(
                 request.email(),
                 request.name(),
                 passwordEncoder.encode(request.password())
         );
-        var saved = userRepository.save(user);
-        log.info("Created user {} (email {})", saved.getId(), saved.getEmail());
-        return UserResponse.from(saved);
+        try {
+            var saved = userRepository.save(user);
+            log.info("Created user {} (email {})", saved.getId(), saved.getEmail());
+            return UserResponse.from(saved);
+        } catch (DataIntegrityViolationException ex) {
+            // Email uniqueness is enforced by the DB unique constraint. Catching
+            // here (rather than pre-checking with existsByEmail) avoids the race
+            // where two concurrent requests both pass a pre-check before either
+            // inserts.
+            log.warn("Email already in use: {}", request.email());
+            throw new IllegalArgumentException("Email already in use");
+        }
     }
 
     @Transactional(readOnly = true)
@@ -51,21 +54,31 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    public List<UserResponse> findAll() {
-        log.debug("Listing all users");
-        return userRepository.findAll().stream()
-                .map(UserResponse::from)
-                .toList();
+    public Page<UserResponse> findAll(Pageable pageable) {
+        log.debug("Listing users: {}", pageable);
+        return userRepository.findAll(pageable).map(UserResponse::from);
     }
 
+    @Transactional
     public UserResponse update(Long id, UpdateUserRequest request) {
         log.info("Updating user {}", id);
         var user = userRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("User not found: " + id));
-        user.setName(request.name());
-        return UserResponse.from(userRepository.save(user));
+        if (request.name() != null) {
+            user.setName(request.name());
+        }
+        if (request.email() != null && !request.email().equals(user.getEmail())) {
+            user.changeEmail(request.email());
+        }
+        try {
+            return UserResponse.from(userRepository.save(user));
+        } catch (DataIntegrityViolationException ex) {
+            log.warn("Email already in use: {}", request.email());
+            throw new IllegalArgumentException("Email already in use");
+        }
     }
 
+    @Transactional
     public void delete(Long id) {
         log.info("Deleting user {}", id);
         var user = userRepository.findById(id)

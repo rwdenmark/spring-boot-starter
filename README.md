@@ -7,7 +7,7 @@ A reference project for someone modernizing from older Java/Apache stacks. Hits 
 - **Spring Boot 3.4** on **Java 21**
 - **PostgreSQL** with **Flyway** migrations
 - **Spring Data JPA** for persistence
-- **Spring Security 6** (modern `SecurityFilterChain` style)
+- **Spring Security 6** (modern `SecurityFilterChain` style, HTTP Basic backed by the user DB)
 - **Bean validation** with Jakarta annotations
 - **RFC 7807 problem details** for error responses
 - **Actuator + Micrometer + Prometheus** for observability
@@ -30,24 +30,46 @@ spring-starter/
     │   ├── java/com/example/starter/
     │   │   ├── StarterApplication.java          # @SpringBootApplication entry point
     │   │   ├── config/
+    │   │   │   ├── AppProperties.java           # @ConfigurationProperties for `app.*`
     │   │   │   └── SecurityConfig.java          # SecurityFilterChain bean
     │   │   ├── common/
     │   │   │   ├── NotFoundException.java
     │   │   │   └── GlobalExceptionHandler.java  # @RestControllerAdvice
+    │   │   ├── greeting/
+    │   │   │   └── GreetingController.java      # Example endpoint reading config
     │   │   └── user/
-    │   │       ├── User.java                    # JPA entity
+    │   │       ├── User.java                    # JPA entity (password JsonIgnored)
     │   │       ├── UserRepository.java          # Spring Data interface
-    │   │       ├── UserDtos.java                # Records for request/response
+    │   │       ├── CreateUserRequest.java       # POST payload
+    │   │       ├── UpdateUserRequest.java       # PATCH payload (optional fields)
+    │   │       ├── UserResponse.java            # API response DTO
     │   │       ├── UserService.java             # Business logic
-    │   │       └── UserController.java          # REST endpoints
+    │   │       ├── UserController.java          # REST endpoints
+    │   │       └── JpaUserDetailsService.java   # Spring Security auth source
     │   └── resources/
     │       ├── application.yml                  # Config (no XML)
+    │       ├── application-dev.yml              # Dev-profile overrides
     │       └── db/migration/
     │           └── V1__create_users_table.sql   # Flyway migration
     └── test/
-        └── java/com/example/starter/user/
-            └── UserControllerIT.java            # @SpringBootTest + Testcontainers
+        └── java/com/example/starter/
+            ├── greeting/GreetingControllerTest.java   # @WebMvcTest slice
+            └── user/
+                ├── UserServiceTest.java               # Mockito unit tests
+                ├── UserControllerTest.java            # @WebMvcTest slice
+                └── UserControllerIT.java              # Real Postgres via Testcontainers
 ```
+
+## API
+
+| Method | Path             | Auth          | Description                              |
+|--------|------------------|---------------|------------------------------------------|
+| POST   | /api/users       | public        | Register a new user                      |
+| GET    | /api/users       | authenticated | Paginated list (`?page=0&size=20`)       |
+| GET    | /api/users/{id}  | authenticated | Get one user                             |
+| PATCH  | /api/users/{id}  | authenticated | Partial update (any subset of fields)    |
+| DELETE | /api/users/{id}  | ADMIN role    | Delete a user                            |
+| GET    | /api/greeting    | public        | Returns the configured greeting          |
 
 ## Running locally
 
@@ -66,13 +88,16 @@ App is on http://localhost:8080.
 ### Try it
 
 ```bash
-# Create a user
+# Register a user
 curl -X POST http://localhost:8080/api/users \
   -H 'Content-Type: application/json' \
   -d '{"email":"alice@example.com","name":"Alice","password":"supersecret"}'
 
-# List users
-curl http://localhost:8080/api/users
+# List users (auth required)
+curl -u alice@example.com:supersecret http://localhost:8080/api/users
+
+# Greeting (public)
+curl http://localhost:8080/api/greeting
 
 # Health check
 curl http://localhost:8080/actuator/health
@@ -99,7 +124,7 @@ docker build -t starter .
 ./mvnw test
 ```
 
-Integration tests spin up real Postgres via Testcontainers (needs Docker running).
+Unit and slice tests run in milliseconds. Integration tests spin up real Postgres via Testcontainers (needs Docker running).
 
 ## Deploying
 
@@ -111,23 +136,3 @@ brew install flyctl
 fly launch        # reads the Dockerfile, sets up Postgres, gets you a URL
 fly deploy
 ```
-
-## Things to explore next
-
-In order of value:
-
-1. **Add JWT auth.** Replace `permitAll()` in `SecurityConfig` with real authentication. Use `spring-boot-starter-oauth2-resource-server` and JWT tokens.
-2. **Add `spring-boot-docker-compose`** dependency — Boot will auto-start Compose services when you run the app locally.
-3. **Try a second Flyway migration** (`V2__...sql`) to feel the workflow.
-4. **Switch to Gradle** if you want — Initializr can regenerate the same project with `build.gradle.kts`.
-5. **Add OpenAPI docs** with `springdoc-openapi-starter-webmvc-ui` — auto-generates Swagger UI at `/swagger-ui.html`.
-6. **Add Spring AI** if you want to play with LLM integration.
-
-## Notes coming from older Spring
-
-- No `web.xml`, no `applicationContext.xml`, no `dispatcher-servlet.xml`. All gone.
-- `@Autowired` field injection works but constructor injection (shown here) is the convention now.
-- `javax.*` imports → `jakarta.*`. Easy find-and-replace.
-- `WebSecurityConfigurerAdapter` is deprecated; use the `SecurityFilterChain` bean style (shown here).
-- `ddl-auto: validate` + Flyway is the production-grade combo. Never use `update` or `create-drop` outside of throwaway tests.
-- Embedded Tomcat means the WAR is dead. Build a fat JAR or a container.

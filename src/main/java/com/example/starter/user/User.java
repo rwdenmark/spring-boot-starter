@@ -1,5 +1,6 @@
 package com.example.starter.user;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import java.time.Instant;
 
@@ -17,6 +18,7 @@ public class User {
     @Column(nullable = false)
     private String name;
 
+    @JsonIgnore
     @Column(nullable = false)
     private String password;
 
@@ -43,7 +45,6 @@ public class User {
         this.updatedAt = Instant.now();
     }
 
-    // Constructors
     protected User() {} // JPA requires a no-arg constructor
 
     public User(String email, String name, String password) {
@@ -52,10 +53,8 @@ public class User {
         this.password = password;
     }
 
-    // Getters & setters
     public Long getId() { return id; }
     public String getEmail() { return email; }
-    public void setEmail(String email) { this.email = email; }
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
     public String getPassword() { return password; }
@@ -64,4 +63,12 @@ public class User {
     public void setRole(Role role) { this.role = role; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
+
+    /**
+     * Email changes are a domain event (uniqueness check, possible re-verification, audit).
+     * Force callers through a deliberate method rather than a setter.
+     */
+    public void changeEmail(String newEmail) {
+        this.email = newEmail;
+    }
 }
