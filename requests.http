@@ -8,6 +8,28 @@ Content-Type: application/json
   "password": "supersecret"
 }
 
+### Public - login, stores the token for the requests below
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "carol@example.com",
+  "password": "supersecret"
+}
+
+> {% client.global.set("token", response.body.token); %}
+
+### Public - login as the bootstrapped admin (for the DELETE below)
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@example.com",
+  "password": "changeme"
+}
+
+> {% client.global.set("token", response.body.token); %}
+
 ### Public - greeting
 GET http://localhost:8080/api/greeting
 
@@ -16,17 +38,17 @@ GET http://localhost:8080/actuator/health
 
 ### Authenticated - list users (paginated)
 GET http://localhost:8080/api/users?page=0&size=10
-Authorization: Basic admin@example.com changeme
+Authorization: Bearer {{token}}
 Accept: application/json
 
 ### Authenticated - get one user by id
 GET http://localhost:8080/api/users/1
-Authorization: Basic admin@example.com changeme
+Authorization: Bearer {{token}}
 Accept: application/json
 
-### Authenticated - PATCH (partial update)
+### Authenticated - PATCH (partial update, own account or ADMIN)
 PATCH http://localhost:8080/api/users/1
-Authorization: Basic admin@example.com changeme
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
@@ -35,16 +57,16 @@ Content-Type: application/json
 
 ### Authenticated - PATCH email
 PATCH http://localhost:8080/api/users/1
-Authorization: Basic admin@example.com changeme
+Authorization: Bearer {{token}}
 Content-Type: application/json
 
 {
   "email": "carol.new@example.com"
 }
 
-### ADMIN only - delete a user
+### ADMIN only - delete a user (login as admin first)
 DELETE http://localhost:8080/api/users/1
-Authorization: Basic admin@example.com changeme
+Authorization: Bearer {{token}}
 
 ### Public - Swagger UI
 GET http://localhost:8080/swagger-ui.html

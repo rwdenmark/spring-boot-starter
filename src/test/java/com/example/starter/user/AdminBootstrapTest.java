@@ -26,7 +26,7 @@ class AdminBootstrapTest {
     private final MockEnvironment environment = new MockEnvironment();
 
     private AdminBootstrap bootstrap(String email, String password) {
-        var props = new AppProperties(null, new AppProperties.Admin(email, password), null, null, null);
+        var props = new AppProperties(null, new AppProperties.Admin(email, password), null, null, null, null);
         return new AdminBootstrap(userRepository, passwordEncoder, props, environment);
     }
 

@@ -15,13 +15,15 @@ public record AppProperties(
         Admin admin,
         Cors cors,
         RateLimit rateLimit,
-        Security security
+        Security security,
+        Jwt jwt
 ) {
     public AppProperties {
         if (admin == null) admin = new Admin(null, null);
         if (cors == null) cors = new Cors(List.of());
         if (rateLimit == null) rateLimit = new RateLimit(100, false);
         if (security == null) security = new Security(10);
+        if (jwt == null) jwt = new Jwt(null, 60);
     }
 
     public record Admin(String email, String password) {}
@@ -35,4 +37,6 @@ public record AppProperties(
     public record RateLimit(int registrationRequestsPerMinute, boolean trustForwardedFor) {}
 
     public record Security(int bcryptStrength) {}
+
+    public record Jwt(String secret, long expiryMinutes) {}
 }

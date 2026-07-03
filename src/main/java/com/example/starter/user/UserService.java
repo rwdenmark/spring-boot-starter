@@ -11,6 +11,7 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -91,10 +92,21 @@ public class UserService {
         }
         boolean admin = authentication.getAuthorities().stream()
                 .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
-        if (!admin && !target.getEmail().equals(authentication.getName())) {
-            log.warn("User {} tried to update user {}", authentication.getName(), target.getId());
+        var email = principalEmail(authentication);
+        if (!admin && !target.getEmail().equals(email)) {
+            log.warn("User {} tried to update user {}", email, target.getId());
             throw new AccessDeniedException("You can only update your own account");
         }
+    }
+
+    // Tokens carry the email in the subject claim. JwtAuthenticationToken maps
+    // sub to getName() by default, but reading the Jwt directly keeps ownership
+    // pinned to the token even if the principal claim mapping changes.
+    private String principalEmail(Authentication authentication) {
+        if (authentication.getPrincipal() instanceof Jwt jwt) {
+            return jwt.getSubject();
+        }
+        return authentication.getName();
     }
 
     @Transactional

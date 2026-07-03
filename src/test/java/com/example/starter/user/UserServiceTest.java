@@ -17,6 +17,8 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
 import java.util.List;
 import java.util.Optional;
@@ -48,6 +50,17 @@ class UserServiceTest {
     private void authenticateAs(String email, String role) {
         var auth = new UsernamePasswordAuthenticationToken(
                 email, "n/a", List.of(new SimpleGrantedAuthority("ROLE_" + role)));
+        SecurityContextHolder.getContext().setAuthentication(auth);
+    }
+
+    // Mirrors what the resource-server chain puts in the context, a
+    // JwtAuthenticationToken whose principal is the decoded Jwt.
+    private void authenticateWithJwt(String subject, String role) {
+        var jwt = Jwt.withTokenValue("test-token")
+                .header("alg", "HS256")
+                .subject(subject)
+                .build();
+        var auth = new JwtAuthenticationToken(jwt, List.of(new SimpleGrantedAuthority("ROLE_" + role)));
         SecurityContextHolder.getContext().setAuthentication(auth);
     }
 
@@ -170,6 +183,30 @@ class UserServiceTest {
         var result = userService.update(1L, new UpdateUserRequest("Renamed By Admin", null));
 
         assertThat(result.name()).isEqualTo("Renamed By Admin");
+    }
+
+    @Test
+    void update_withJwtPrincipal_matchesOnSubject() {
+        var existing = existingUser("a@b.com", "Alice");
+        authenticateWithJwt("a@b.com", "USER");
+        when(userRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(userRepository.saveAndFlush(existing)).thenReturn(existing);
+
+        var result = userService.update(1L, new UpdateUserRequest("Alice Via Jwt", null));
+
+        assertThat(result.name()).isEqualTo("Alice Via Jwt");
+    }
+
+    @Test
+    void update_withJwtPrincipal_differentSubject_throwsAccessDenied() {
+        var existing = existingUser("a@b.com", "Alice");
+        authenticateWithJwt("other@b.com", "USER");
+        when(userRepository.findById(1L)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> userService.update(1L, new UpdateUserRequest("Hacked", null)))
+                .isInstanceOf(AccessDeniedException.class);
+
+        verify(userRepository, never()).saveAndFlush(any());
     }
 
     @Test

@@ -4,8 +4,8 @@ CREATE TABLE users (
     name        VARCHAR(255) NOT NULL,
     password    VARCHAR(255) NOT NULL,
     role        VARCHAR(32)  NOT NULL DEFAULT 'USER',
-    created_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at  TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_users_email ON users(email);
+-- UNIQUE on email already backs lookups with an index. No separate index needed.

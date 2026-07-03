@@ -8,12 +8,14 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.http.MediaType;
-import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -29,6 +31,19 @@ class UserControllerIT {
 
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
+
+    // jwt() injects the token past the decoder, the same shape the
+    // resource-server chain produces. The subject is the email because that
+    // is what the ownership check reads. JwtAuthIT covers real signed tokens.
+    private static RequestPostProcessor userJwt(String email) {
+        return jwt().jwt(j -> j.subject(email))
+                .authorities(new SimpleGrantedAuthority("ROLE_USER"));
+    }
+
+    private static RequestPostProcessor adminJwt() {
+        return jwt().jwt(j -> j.subject("root@example.com"))
+                .authorities(new SimpleGrantedAuthority("ROLE_ADMIN"));
+    }
 
     private Long createUser(String email, String name) throws Exception {
         var json = """
@@ -46,7 +61,7 @@ class UserControllerIT {
     }
 
     private long countUsers() throws Exception {
-        var result = mockMvc.perform(get("/api/users"))
+        var result = mockMvc.perform(get("/api/users").with(userJwt("reader@example.com")))
                 .andExpect(status().isOk())
                 .andReturn();
         return objectMapper.readTree(result.getResponse().getContentAsString())
@@ -89,24 +104,21 @@ class UserControllerIT {
     }
 
     @Test
-    @WithMockUser
     void getUserById_returnsUser() throws Exception {
         Long id = createUser("alice@example.com", "Alice");
-        mockMvc.perform(get("/api/users/{id}", id))
+        mockMvc.perform(get("/api/users/{id}", id).with(userJwt("reader@example.com")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id").value(id))
                 .andExpect(jsonPath("$.email").value("alice@example.com"));
     }
 
     @Test
-    @WithMockUser
     void getUserById_notFound_returns404() throws Exception {
-        mockMvc.perform(get("/api/users/{id}", 999_999_999L))
+        mockMvc.perform(get("/api/users/{id}", 999_999_999L).with(userJwt("reader@example.com")))
                 .andExpect(status().isNotFound());
     }
 
     @Test
-    @WithMockUser
     void getAllUsers_returnsPagedResult() throws Exception {
         // Relative to the starting count so this test does not care what
         // AdminBootstrap or other setup seeded.
@@ -116,17 +128,17 @@ class UserControllerIT {
         createUser("b@example.com", "B");
 
         // jsonPath deserializes small numbers as Integer, so compare as int.
-        mockMvc.perform(get("/api/users"))
+        mockMvc.perform(get("/api/users").with(userJwt("reader@example.com")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value((int) (before + 2)));
     }
 
     @Test
-    @WithMockUser(username = "alice@example.com")
     void updateUser_ownAccount_partialUpdate_keepsOtherFields() throws Exception {
         Long id = createUser("alice@example.com", "Alice");
 
         mockMvc.perform(patch("/api/users/{id}", id)
+                        .with(userJwt("alice@example.com"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"Alice Updated"}
@@ -137,11 +149,11 @@ class UserControllerIT {
     }
 
     @Test
-    @WithMockUser(username = "mallory@example.com")
     void updateUser_someoneElsesAccount_returns403() throws Exception {
         Long id = createUser("alice@example.com", "Alice");
 
         mockMvc.perform(patch("/api/users/{id}", id)
+                        .with(userJwt("mallory@example.com"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"Hacked"}
@@ -150,11 +162,11 @@ class UserControllerIT {
     }
 
     @Test
-    @WithMockUser(username = "root@example.com", roles = "ADMIN")
     void updateUser_asAdmin_canUpdateAnyAccount() throws Exception {
         Long id = createUser("alice@example.com", "Alice");
 
         mockMvc.perform(patch("/api/users/{id}", id)
+                        .with(adminJwt())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"Renamed By Admin"}
@@ -164,12 +176,12 @@ class UserControllerIT {
     }
 
     @Test
-    @WithMockUser(username = "alice@example.com")
     void updateUser_duplicateEmail_returns400() throws Exception {
         createUser("bob@example.com", "Bob");
         Long aliceId = createUser("alice@example.com", "Alice");
 
         mockMvc.perform(patch("/api/users/{id}", aliceId)
+                        .with(userJwt("alice@example.com"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"email":"bob@example.com"}
@@ -179,9 +191,9 @@ class UserControllerIT {
     }
 
     @Test
-    @WithMockUser
     void updateUser_notFound_returns404() throws Exception {
         mockMvc.perform(patch("/api/users/{id}", 999_999_999L)
+                        .with(userJwt("reader@example.com"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"Whatever"}
@@ -190,20 +202,18 @@ class UserControllerIT {
     }
 
     @Test
-    @WithMockUser(roles = "ADMIN")
     void deleteUser_asAdmin_returns204_andGetReturns404() throws Exception {
         Long id = createUser("alice@example.com", "Alice");
-        mockMvc.perform(delete("/api/users/{id}", id))
+        mockMvc.perform(delete("/api/users/{id}", id).with(adminJwt()))
                 .andExpect(status().isNoContent());
-        mockMvc.perform(get("/api/users/{id}", id))
+        mockMvc.perform(get("/api/users/{id}", id).with(adminJwt()))
                 .andExpect(status().isNotFound());
     }
 
     @Test
-    @WithMockUser(roles = "USER")
     void deleteUser_asUser_returns403() throws Exception {
         Long id = createUser("alice@example.com", "Alice");
-        mockMvc.perform(delete("/api/users/{id}", id))
+        mockMvc.perform(delete("/api/users/{id}", id).with(userJwt("alice@example.com")))
                 .andExpect(status().isForbidden());
     }
 }
