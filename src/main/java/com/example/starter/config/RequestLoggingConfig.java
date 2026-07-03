@@ -5,7 +5,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.filter.CommonsRequestLoggingFilter;
 
 /**
- * Disabled by default. Enable per-request logging by raising the level:
+ * Disabled by default. Enable per-request logging by raising the level
  *   logging.level.org.springframework.web.filter.CommonsRequestLoggingFilter: DEBUG
  * Payload logging is off because request bodies can contain secrets.
  */

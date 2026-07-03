@@ -96,6 +96,8 @@ spring-starter/
 | GET    | /api/greeting    | public        | Configured greeting                      |
 | GET    | /swagger-ui.html | public (locked down under `prod`) | OpenAPI / Swagger UI |
 
+Errors are ProblemDetail JSON. A duplicate email is a 400, on both registration and a PATCH that changes the email.
+
 ## Authentication
 
 Stateless JWT access tokens signed with HS256.

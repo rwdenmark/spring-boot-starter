@@ -43,7 +43,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * exception-to-status translation in {@link com.example.starter.common.GlobalExceptionHandler}.
  *
  * Companion to {@link UserControllerIT}, which is the full @SpringBootTest +
- * Testcontainers integration test. Use the IT for end-to-end behavior; use this
+ * Testcontainers integration test. Use the IT for end-to-end behavior and this
  * slice test for fast feedback on controller-only changes.
  */
 @WebMvcTest(controllers = UserController.class,
