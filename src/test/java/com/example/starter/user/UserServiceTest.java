@@ -1,6 +1,8 @@
 package com.example.starter.user;
 
+import com.example.starter.common.DuplicateEmailException;
 import com.example.starter.common.NotFoundException;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -10,6 +12,10 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.List;
@@ -27,12 +33,22 @@ class UserServiceTest {
     @Mock PasswordEncoder passwordEncoder;
     @InjectMocks UserService userService;
 
-    private User existingUser(Long id, String email, String name) {
-        var user = new User(email, name, "{bcrypt}hashed");
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
+
+    private User existingUser(String email, String name) {
         // User has no id setter (JPA assigns id and timestamps), so this builds
         // a fresh entity and tests stub the repository to return it as the
-        // saved value. The id parameter is unused today.
-        return user;
+        // saved value.
+        return new User(email, name, "{bcrypt}hashed");
+    }
+
+    private void authenticateAs(String email, String role) {
+        var auth = new UsernamePasswordAuthenticationToken(
+                email, "n/a", List.of(new SimpleGrantedAuthority("ROLE_" + role)));
+        SecurityContextHolder.getContext().setAuthentication(auth);
     }
 
     @Test
@@ -52,20 +68,20 @@ class UserServiceTest {
     }
 
     @Test
-    void create_duplicateEmail_translatesToIllegalArgument() {
+    void create_duplicateEmail_translatesToDuplicateEmailException() {
         when(passwordEncoder.encode(any())).thenReturn("{bcrypt}hashed");
         when(userRepository.save(any(User.class)))
                 .thenThrow(new DataIntegrityViolationException("unique violation"));
 
         assertThatThrownBy(() -> userService.create(
                 new CreateUserRequest("dup@b.com", "Dup", "supersecret")))
-                .isInstanceOf(IllegalArgumentException.class)
+                .isInstanceOf(DuplicateEmailException.class)
                 .hasMessageContaining("Email already in use");
     }
 
     @Test
     void findById_returnsDto() {
-        when(userRepository.findById(1L)).thenReturn(Optional.of(existingUser(1L, "a@b.com", "Alice")));
+        when(userRepository.findById(1L)).thenReturn(Optional.of(existingUser("a@b.com", "Alice")));
 
         var result = userService.findById(1L);
 
@@ -84,7 +100,7 @@ class UserServiceTest {
     @Test
     void findAll_mapsPageOfEntities() {
         var pageable = PageRequest.of(0, 10);
-        var entities = List.of(existingUser(1L, "a@b.com", "A"), existingUser(2L, "b@b.com", "B"));
+        var entities = List.of(existingUser("a@b.com", "A"), existingUser("b@b.com", "B"));
         when(userRepository.findAll(pageable)).thenReturn(new PageImpl<>(entities, pageable, 2));
 
         Page<UserResponse> page = userService.findAll(pageable);
@@ -96,9 +112,10 @@ class UserServiceTest {
 
     @Test
     void update_appliesProvidedFieldsOnly() {
-        var existing = existingUser(1L, "a@b.com", "Alice");
+        var existing = existingUser("a@b.com", "Alice");
+        authenticateAs("a@b.com", "USER");
         when(userRepository.findById(1L)).thenReturn(Optional.of(existing));
-        when(userRepository.save(existing)).thenReturn(existing);
+        when(userRepository.saveAndFlush(existing)).thenReturn(existing);
 
         var result = userService.update(1L, new UpdateUserRequest("Alice Updated", null));
 
@@ -108,9 +125,10 @@ class UserServiceTest {
 
     @Test
     void update_canChangeEmail() {
-        var existing = existingUser(1L, "old@b.com", "Alice");
+        var existing = existingUser("old@b.com", "Alice");
+        authenticateAs("old@b.com", "USER");
         when(userRepository.findById(1L)).thenReturn(Optional.of(existing));
-        when(userRepository.save(existing)).thenReturn(existing);
+        when(userRepository.saveAndFlush(existing)).thenReturn(existing);
 
         var result = userService.update(1L, new UpdateUserRequest(null, "new@b.com"));
 
@@ -118,15 +136,49 @@ class UserServiceTest {
     }
 
     @Test
-    void update_duplicateEmail_translatesToIllegalArgument() {
-        var existing = existingUser(1L, "old@b.com", "Alice");
+    void update_duplicateEmail_translatesToDuplicateEmailException() {
+        var existing = existingUser("old@b.com", "Alice");
+        authenticateAs("old@b.com", "USER");
         when(userRepository.findById(1L)).thenReturn(Optional.of(existing));
-        when(userRepository.save(existing))
+        when(userRepository.saveAndFlush(existing))
                 .thenThrow(new DataIntegrityViolationException("unique violation"));
 
         assertThatThrownBy(() -> userService.update(1L,
                 new UpdateUserRequest(null, "taken@b.com")))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(DuplicateEmailException.class);
+    }
+
+    @Test
+    void update_asDifferentUser_throwsAccessDenied() {
+        var existing = existingUser("a@b.com", "Alice");
+        authenticateAs("other@b.com", "USER");
+        when(userRepository.findById(1L)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> userService.update(1L, new UpdateUserRequest("Hacked", null)))
+                .isInstanceOf(AccessDeniedException.class);
+
+        verify(userRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void update_asAdmin_canUpdateOtherUser() {
+        var existing = existingUser("a@b.com", "Alice");
+        authenticateAs("admin@b.com", "ADMIN");
+        when(userRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(userRepository.saveAndFlush(existing)).thenReturn(existing);
+
+        var result = userService.update(1L, new UpdateUserRequest("Renamed By Admin", null));
+
+        assertThat(result.name()).isEqualTo("Renamed By Admin");
+    }
+
+    @Test
+    void update_withoutAuthentication_throwsAccessDenied() {
+        var existing = existingUser("a@b.com", "Alice");
+        when(userRepository.findById(1L)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> userService.update(1L, new UpdateUserRequest("X", null)))
+                .isInstanceOf(AccessDeniedException.class);
     }
 
     @Test
@@ -139,7 +191,7 @@ class UserServiceTest {
 
     @Test
     void delete_removesExistingUser() {
-        var existing = existingUser(1L, "a@b.com", "Alice");
+        var existing = existingUser("a@b.com", "Alice");
         when(userRepository.findById(1L)).thenReturn(Optional.of(existing));
 
         userService.delete(1L);

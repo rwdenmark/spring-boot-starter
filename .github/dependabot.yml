@@ -7,6 +7,10 @@ updates:
       day: monday
       time: "06:00"
     open-pull-requests-limit: 5
+    ignore:
+      # springdoc 3.x targets Boot 4. Stay on 2.8.x until the Boot parent moves.
+      - dependency-name: "org.springdoc:springdoc-openapi-starter-webmvc-ui"
+        update-types: ["version-update:semver-major"]
     groups:
       spring-boot:
         patterns:

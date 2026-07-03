@@ -1,11 +1,15 @@
 package com.example.starter.user;
 
+import com.example.starter.common.DuplicateEmailException;
 import com.example.starter.common.NotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,7 +42,7 @@ public class UserService {
         } catch (DataIntegrityViolationException ex) {
             // Rely on the DB unique constraint rather than a pre-check to avoid races
             log.warn("Email already in use: {}", request.email());
-            throw new IllegalArgumentException("Email already in use");
+            throw new DuplicateEmailException("Email already in use");
         }
     }
 
@@ -61,17 +65,35 @@ public class UserService {
         log.info("Updating user {}", id);
         var user = userRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("User not found: " + id));
+        requireOwnershipOrAdmin(user);
         if (request.name() != null) {
             user.setName(request.name());
         }
         if (request.email() != null && !request.email().equals(user.getEmail())) {
-            user.changeEmail(request.email());
+            user.setEmail(request.email());
         }
         try {
-            return UserResponse.from(userRepository.save(user));
+            // saveAndFlush so the unique-constraint violation surfaces here where
+            // the catch can map it, not at commit after this method returns.
+            return UserResponse.from(userRepository.saveAndFlush(user));
         } catch (DataIntegrityViolationException ex) {
             log.warn("Email already in use: {}", request.email());
-            throw new IllegalArgumentException("Email already in use");
+            throw new DuplicateEmailException("Email already in use");
+        }
+    }
+
+    // DELETE is role-gated in SecurityConfig. Ownership needs the target row,
+    // so this check runs here after the load.
+    private void requireOwnershipOrAdmin(User target) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new AccessDeniedException("Not authenticated");
+        }
+        boolean admin = authentication.getAuthorities().stream()
+                .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
+        if (!admin && !target.getEmail().equals(authentication.getName())) {
+            log.warn("User {} tried to update user {}", authentication.getName(), target.getId());
+            throw new AccessDeniedException("You can only update your own account");
         }
     }
 

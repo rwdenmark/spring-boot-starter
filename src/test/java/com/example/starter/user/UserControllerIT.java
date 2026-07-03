@@ -14,7 +14,6 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -37,7 +36,6 @@ class UserControllerIT {
                 """.formatted(email, name);
 
         var result = mockMvc.perform(post("/api/users")
-                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json))
                 .andExpect(status().isCreated())
@@ -47,10 +45,17 @@ class UserControllerIT {
                 .get("id").asLong();
     }
 
+    private long countUsers() throws Exception {
+        var result = mockMvc.perform(get("/api/users"))
+                .andExpect(status().isOk())
+                .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString())
+                .get("totalElements").asLong();
+    }
+
     @Test
     void createUser_returnsCreated_andHidesPassword() throws Exception {
         mockMvc.perform(post("/api/users")
-                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"email":"alice@example.com","name":"Alice","password":"supersecret"}
@@ -64,7 +69,6 @@ class UserControllerIT {
     @Test
     void createUser_invalidEmail_returns400() throws Exception {
         mockMvc.perform(post("/api/users")
-                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"email":"not-an-email","name":"Bob","password":"supersecret"}
@@ -77,7 +81,6 @@ class UserControllerIT {
         createUser("dup@example.com", "First");
 
         mockMvc.perform(post("/api/users")
-                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"email":"dup@example.com","name":"Second","password":"supersecret"}
@@ -105,21 +108,25 @@ class UserControllerIT {
     @Test
     @WithMockUser
     void getAllUsers_returnsPagedResult() throws Exception {
+        // Relative to the starting count so this test does not care what
+        // AdminBootstrap or other setup seeded.
+        long before = countUsers();
+
         createUser("a@example.com", "A");
         createUser("b@example.com", "B");
-        // AdminBootstrap seeds one admin at startup; the test adds two more.
+
+        // jsonPath deserializes small numbers as Integer, so compare as int.
         mockMvc.perform(get("/api/users"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalElements").value(3));
+                .andExpect(jsonPath("$.totalElements").value((int) (before + 2)));
     }
 
     @Test
-    @WithMockUser
-    void updateUser_partialUpdate_keepsOtherFields() throws Exception {
+    @WithMockUser(username = "alice@example.com")
+    void updateUser_ownAccount_partialUpdate_keepsOtherFields() throws Exception {
         Long id = createUser("alice@example.com", "Alice");
 
         mockMvc.perform(patch("/api/users/{id}", id)
-                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"Alice Updated"}
@@ -130,10 +137,51 @@ class UserControllerIT {
     }
 
     @Test
+    @WithMockUser(username = "mallory@example.com")
+    void updateUser_someoneElsesAccount_returns403() throws Exception {
+        Long id = createUser("alice@example.com", "Alice");
+
+        mockMvc.perform(patch("/api/users/{id}", id)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Hacked"}
+                                """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(username = "root@example.com", roles = "ADMIN")
+    void updateUser_asAdmin_canUpdateAnyAccount() throws Exception {
+        Long id = createUser("alice@example.com", "Alice");
+
+        mockMvc.perform(patch("/api/users/{id}", id)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Renamed By Admin"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Renamed By Admin"));
+    }
+
+    @Test
+    @WithMockUser(username = "alice@example.com")
+    void updateUser_duplicateEmail_returns400() throws Exception {
+        createUser("bob@example.com", "Bob");
+        Long aliceId = createUser("alice@example.com", "Alice");
+
+        mockMvc.perform(patch("/api/users/{id}", aliceId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"bob@example.com"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Email already in use"));
+    }
+
+    @Test
     @WithMockUser
     void updateUser_notFound_returns404() throws Exception {
         mockMvc.perform(patch("/api/users/{id}", 999_999_999L)
-                        .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"Whatever"}
@@ -145,7 +193,7 @@ class UserControllerIT {
     @WithMockUser(roles = "ADMIN")
     void deleteUser_asAdmin_returns204_andGetReturns404() throws Exception {
         Long id = createUser("alice@example.com", "Alice");
-        mockMvc.perform(delete("/api/users/{id}", id).with(csrf()))
+        mockMvc.perform(delete("/api/users/{id}", id))
                 .andExpect(status().isNoContent());
         mockMvc.perform(get("/api/users/{id}", id))
                 .andExpect(status().isNotFound());
@@ -155,7 +203,7 @@ class UserControllerIT {
     @WithMockUser(roles = "USER")
     void deleteUser_asUser_returns403() throws Exception {
         Long id = createUser("alice@example.com", "Alice");
-        mockMvc.perform(delete("/api/users/{id}", id).with(csrf()))
+        mockMvc.perform(delete("/api/users/{id}", id))
                 .andExpect(status().isForbidden());
     }
 }

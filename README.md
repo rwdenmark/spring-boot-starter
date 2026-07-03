@@ -40,6 +40,7 @@ spring-starter/
     │   │   │   └── RateLimitingFilter.java
     │   │   ├── common/
     │   │   │   ├── NotFoundException.java
+    │   │   │   ├── DuplicateEmailException.java
     │   │   │   └── GlobalExceptionHandler.java
     │   │   ├── greeting/
     │   │   │   └── GreetingController.java
@@ -60,11 +61,15 @@ spring-starter/
     │       └── db/migration/V1__create_users_table.sql
     └── test/
         └── java/com/example/starter/
+            ├── config/RateLimitingFilterTest.java
             ├── greeting/GreetingControllerIT.java
             └── user/
                 ├── UserServiceTest.java
+                ├── AdminBootstrapTest.java
                 ├── UserControllerSliceTest.java
-                └── UserControllerIT.java
+                ├── UserControllerSecurityTest.java
+                ├── UserControllerIT.java
+                └── BasicAuthIT.java
 ```
 
 ## API
@@ -74,10 +79,10 @@ spring-starter/
 | POST   | /api/users       | public        | Register a new user                      |
 | GET    | /api/users       | authenticated | Paginated list (`?page=0&size=20`)       |
 | GET    | /api/users/{id}  | authenticated | Get one user                             |
-| PATCH  | /api/users/{id}  | authenticated | Partial update                           |
+| PATCH  | /api/users/{id}  | authenticated | Partial update. Own account only, ADMIN can update anyone |
 | DELETE | /api/users/{id}  | ADMIN         | Delete a user                            |
 | GET    | /api/greeting    | public        | Configured greeting                      |
-| GET    | /swagger-ui.html | public        | OpenAPI / Swagger UI                     |
+| GET    | /swagger-ui.html | public (locked down under `prod`) | OpenAPI / Swagger UI |
 
 ## Configuration
 
@@ -88,9 +93,10 @@ spring-starter/
 | `DATABASE_PASSWORD`       | `postgres`                                                           |
 | `PORT`                    | `8080`                                                               |
 | `ADMIN_EMAIL`             | `admin@example.com`                                                  |
-| `ADMIN_PASSWORD`          | `changeme` (warns at startup if unchanged)                           |
+| `ADMIN_PASSWORD`          | `changeme` (warns at startup if unchanged, refuses to start under `prod`) |
 | `CORS_ALLOWED_ORIGINS`    | `http://localhost:3000,http://localhost:5173,http://localhost:8080`  |
 | `RATE_LIMIT_REGISTRATION` | `100` (per-IP, per minute, on POST /api/users)                       |
+| `RATE_LIMIT_TRUST_FORWARDED_FOR` | `false`. Set `true` only behind a proxy you control that overwrites `X-Forwarded-For` |
 | `BCRYPT_STRENGTH`         | `10`                                                                 |
 | `SPRING_PROFILES_ACTIVE`  | unset. Set to `prod` for JSON logs and tighter actuator              |
 
@@ -131,7 +137,7 @@ Or with the included Dockerfile: `docker build -t starter .`
 ./mvnw test
 ```
 
-Three tiers. `UserServiceTest` is a plain Mockito unit test and runs in milliseconds. `UserControllerSliceTest` loads only the web layer with `@WebMvcTest` and a mocked service. The two `*IT` classes (`UserControllerIT`, `GreetingControllerIT`) spin up real Postgres via Testcontainers, so Docker must be running.
+Three tiers. `UserServiceTest`, `AdminBootstrapTest`, and `RateLimitingFilterTest` are plain Mockito unit tests and run in milliseconds. `UserControllerSliceTest` loads only the web layer with `@WebMvcTest` and a mocked service, and `UserControllerSecurityTest` does the same with the security filter chain enabled. The `*IT` classes (`UserControllerIT`, `BasicAuthIT`, `GreetingControllerIT`) spin up real Postgres via Testcontainers, so Docker must be running.
 
 ## Deploying
 
@@ -169,7 +175,8 @@ HTTP Basic is in here so you can hit the API with `curl -u` on day one. For prod
 
 There are other gaps to close before going public.
 
-- Rate limiting is in-process, which is fine for one node. Multi-node needs distributed buckets via `bucket4j-redis` or a gateway.
+- Swagger UI and the OpenAPI docs require authentication under `prod`. Everywhere else they stay public.
+- Rate limiting is in-process, which is fine for one node. Multi-node needs distributed buckets via `bucket4j-redis` or a gateway. Behind a proxy, set `RATE_LIMIT_TRUST_FORWARDED_FOR=true` so limits key on the real client address.
 - Source `ADMIN_PASSWORD` and `DATABASE_PASSWORD` from a secrets manager.
 - `/actuator/prometheus` is dropped from the public exposure under `prod`. Re-expose it on the management port and scrape it there.
 - Terminate TLS at your load balancer or reverse proxy. The embedded Tomcat here is HTTP-only.

@@ -2,6 +2,7 @@ package com.example.starter.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -20,9 +21,11 @@ import java.util.List;
 public class SecurityConfig {
 
     private final AppProperties appProperties;
+    private final Environment environment;
 
-    public SecurityConfig(AppProperties appProperties) {
+    public SecurityConfig(AppProperties appProperties, Environment environment) {
         this.appProperties = appProperties;
+        this.environment = environment;
     }
 
     @Bean
@@ -31,14 +34,19 @@ public class SecurityConfig {
             .cors(Customizer.withDefaults())
             .csrf(AbstractHttpConfigurer::disable)
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers(HttpMethod.POST, "/api/users").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/greeting").permitAll()
-                .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
-                .requestMatchers(HttpMethod.DELETE, "/api/users/**").hasRole("ADMIN")
-                .anyRequest().authenticated()
-            )
+            .authorizeHttpRequests(auth -> {
+                auth
+                    .requestMatchers(HttpMethod.POST, "/api/users").permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/greeting").permitAll()
+                    .requestMatchers("/actuator/health", "/actuator/info").permitAll();
+                // Swagger stays open outside prod. Under prod these paths fall through to authenticated.
+                if (!environment.matchesProfiles("prod")) {
+                    auth.requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll();
+                }
+                auth
+                    .requestMatchers(HttpMethod.DELETE, "/api/users/**").hasRole("ADMIN")
+                    .anyRequest().authenticated();
+            })
             .httpBasic(Customizer.withDefaults())
             .formLogin(AbstractHttpConfigurer::disable);
 

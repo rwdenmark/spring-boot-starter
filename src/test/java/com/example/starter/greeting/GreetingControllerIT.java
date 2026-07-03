@@ -11,7 +11,6 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -29,7 +28,7 @@ class GreetingControllerIT {
 
     @Test
     void greeting_isPublic_returnsConfiguredMessage() throws Exception {
-        mockMvc.perform(get("/api/greeting").with(csrf()))
+        mockMvc.perform(get("/api/greeting"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.message").value("hello from test"));
     }

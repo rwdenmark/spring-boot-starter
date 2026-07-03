@@ -2,7 +2,6 @@ package com.example.starter.config;
 
 import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
-import io.github.bucket4j.Refill;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -20,19 +19,27 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Per-IP rate limiter for POST /api/users. Buckets are in-process, so for
- * multi-node deploys swap for bucket4j-redis. The bucket map has no eviction.
- * A high-traffic public service should use a Caffeine cache with TTL.
+ * multi-node deploys swap for bucket4j-redis. The bucket map is capped at
+ * {@link #MAX_TRACKED_IPS} entries. A high-traffic public service should use
+ * a Caffeine cache with TTL instead.
+ *
+ * X-Forwarded-For is only honored when app.rate-limit.trust-forwarded-for is
+ * true. The header is client-supplied, so enable it only behind a proxy you
+ * control that overwrites it.
  */
 @Component
 public class RateLimitingFilter extends OncePerRequestFilter {
 
     private static final Logger log = LoggerFactory.getLogger(RateLimitingFilter.class);
+    private static final int MAX_TRACKED_IPS = 10_000;
 
     private final ConcurrentHashMap<String, Bucket> buckets = new ConcurrentHashMap<>();
     private final int requestsPerMinute;
+    private final boolean trustForwardedFor;
 
     public RateLimitingFilter(AppProperties appProperties) {
         this.requestsPerMinute = appProperties.rateLimit().registrationRequestsPerMinute();
+        this.trustForwardedFor = appProperties.rateLimit().trustForwardedFor();
     }
 
     @Override
@@ -45,6 +52,10 @@ public class RateLimitingFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain chain) throws ServletException, IOException {
         var ip = clientIp(request);
+        // Clearing resets everyone's counts, but it is the cheapest guard against unbounded growth from spoofed addresses.
+        if (buckets.size() > MAX_TRACKED_IPS) {
+            buckets.clear();
+        }
         var bucket = buckets.computeIfAbsent(ip, key -> newBucket());
 
         if (bucket.tryConsume(1)) {
@@ -61,15 +72,19 @@ public class RateLimitingFilter extends OncePerRequestFilter {
 
     private Bucket newBucket() {
         return Bucket.builder()
-                .addLimit(Bandwidth.classic(requestsPerMinute,
-                        Refill.intervally(requestsPerMinute, Duration.ofMinutes(1))))
+                .addLimit(Bandwidth.builder()
+                        .capacity(requestsPerMinute)
+                        .refillIntervally(requestsPerMinute, Duration.ofMinutes(1))
+                        .build())
                 .build();
     }
 
     private String clientIp(HttpServletRequest request) {
-        var forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
+        if (trustForwardedFor) {
+            var forwarded = request.getHeader("X-Forwarded-For");
+            if (forwarded != null && !forwarded.isBlank()) {
+                return forwarded.split(",")[0].trim();
+            }
         }
         return request.getRemoteAddr();
     }

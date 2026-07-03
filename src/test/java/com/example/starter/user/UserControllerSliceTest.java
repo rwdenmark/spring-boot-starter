@@ -17,6 +17,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.example.starter.common.DuplicateEmailException;
 import com.example.starter.common.NotFoundException;
 import com.example.starter.config.RateLimitingFilter;
 
@@ -46,7 +47,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * slice test for fast feedback on controller-only changes.
  */
 @WebMvcTest(controllers = UserController.class,
-        properties = "spring.autoconfigure.exclude=org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration",
         excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = RateLimitingFilter.class))
 @AutoConfigureMockMvc(addFilters = false)
 class UserControllerSliceTest {
@@ -105,9 +105,9 @@ class UserControllerSliceTest {
     }
 
     @Test
-    void create_duplicateEmail_returns400_whenServiceThrowsIllegalArgument() throws Exception {
+    void create_duplicateEmail_returns400_whenServiceThrowsDuplicateEmail() throws Exception {
         when(userService.create(any(CreateUserRequest.class)))
-                .thenThrow(new IllegalArgumentException("Email already in use"));
+                .thenThrow(new DuplicateEmailException("Email already in use"));
 
         mockMvc.perform(post("/api/users")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -154,9 +154,12 @@ class UserControllerSliceTest {
     }
 
     // --- PATCH /api/users/{id} ---
+    // Ownership lives in UserService.update, which is mocked here. These cases
+    // pin the translation of its outcomes to status codes. UserServiceTest
+    // covers the ownership logic itself and UserControllerIT covers it end to end.
 
     @Test
-    void update_partialUpdate_returns200() throws Exception {
+    void update_ownAccount_returns200() throws Exception {
         var updated = new UserResponse(1L, "alice@example.com", "Alice Updated", "USER",
                 Instant.parse("2026-01-01T00:00:00Z"));
         when(userService.update(eq(1L), any(UpdateUserRequest.class))).thenReturn(updated);
@@ -169,6 +172,50 @@ class UserControllerSliceTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Alice Updated"))
                 .andExpect(jsonPath("$.email").value("alice@example.com"));
+    }
+
+    @Test
+    void update_otherUsersAccount_returns403_whenServiceDeniesAccess() throws Exception {
+        when(userService.update(eq(1L), any(UpdateUserRequest.class)))
+                .thenThrow(new org.springframework.security.access.AccessDeniedException(
+                        "You can only update your own account"));
+
+        mockMvc.perform(patch("/api/users/{id}", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Not Yours"}
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.detail").value("You can only update your own account"));
+    }
+
+    @Test
+    void update_asAdmin_returns200_whenServiceAllowsIt() throws Exception {
+        var updated = new UserResponse(1L, "alice@example.com", "Renamed By Admin", "USER",
+                Instant.parse("2026-01-01T00:00:00Z"));
+        when(userService.update(eq(1L), any(UpdateUserRequest.class))).thenReturn(updated);
+
+        mockMvc.perform(patch("/api/users/{id}", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Renamed By Admin"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Renamed By Admin"));
+    }
+
+    @Test
+    void update_duplicateEmail_returns400_whenServiceThrowsDuplicateEmail() throws Exception {
+        when(userService.update(eq(1L), any(UpdateUserRequest.class)))
+                .thenThrow(new DuplicateEmailException("Email already in use"));
+
+        mockMvc.perform(patch("/api/users/{id}", 1L)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"taken@example.com"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("Email already in use"));
     }
 
     @Test

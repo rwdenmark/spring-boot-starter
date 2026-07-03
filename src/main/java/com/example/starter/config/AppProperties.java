@@ -20,7 +20,7 @@ public record AppProperties(
     public AppProperties {
         if (admin == null) admin = new Admin(null, null);
         if (cors == null) cors = new Cors(List.of());
-        if (rateLimit == null) rateLimit = new RateLimit(100);
+        if (rateLimit == null) rateLimit = new RateLimit(100, false);
         if (security == null) security = new Security(10);
     }
 
@@ -32,7 +32,7 @@ public record AppProperties(
         }
     }
 
-    public record RateLimit(int registrationRequestsPerMinute) {}
+    public record RateLimit(int registrationRequestsPerMinute, boolean trustForwardedFor) {}
 
     public record Security(int bcryptStrength) {}
 }
