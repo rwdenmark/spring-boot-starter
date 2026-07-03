@@ -17,7 +17,7 @@ class RateLimitingFilterTest {
 
     private RateLimitingFilter filter(int requestsPerMinute, boolean trustForwardedFor) {
         var props = new AppProperties(null, null, null,
-                new AppProperties.RateLimit(requestsPerMinute, trustForwardedFor), null);
+                new AppProperties.RateLimit(requestsPerMinute, trustForwardedFor), null, null);
         return new RateLimitingFilter(props);
     }
 
