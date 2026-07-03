@@ -29,9 +29,9 @@ class UserServiceTest {
 
     private User existingUser(Long id, String email, String name) {
         var user = new User(email, name, "{bcrypt}hashed");
-        // JPA assigns id and timestamps; in unit tests we reflect them in directly
-        // via setters that don't exist, so we construct a fresh object and
-        // rely on the saved-stub to substitute as needed.
+        // User has no id setter (JPA assigns id and timestamps), so this builds
+        // a fresh entity and tests stub the repository to return it as the
+        // saved value. The id parameter is unused today.
         return user;
     }
 

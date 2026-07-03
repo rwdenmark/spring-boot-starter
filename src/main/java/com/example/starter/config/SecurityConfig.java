@@ -48,6 +48,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         var config = new CorsConfiguration();
+        // A wildcard CORS_ALLOWED_ORIGINS=* fails at runtime because allowCredentials(true) forbids it.
         config.setAllowedOrigins(appProperties.cors().allowedOrigins());
         config.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));

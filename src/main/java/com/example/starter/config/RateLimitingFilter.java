@@ -19,9 +19,9 @@ import java.time.Duration;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Per-IP rate limiter for POST /api/users. In-process buckets — for multi-node
- * deploys, swap for bucket4j-redis. The bucket map has no eviction; a high-
- * traffic public service should use a Caffeine cache with TTL.
+ * Per-IP rate limiter for POST /api/users. Buckets are in-process, so for
+ * multi-node deploys swap for bucket4j-redis. The bucket map has no eviction.
+ * A high-traffic public service should use a Caffeine cache with TTL.
  */
 @Component
 public class RateLimitingFilter extends OncePerRequestFilter {

@@ -1,6 +1,6 @@
 # Spring Boot Starter
 
-A reference Spring Boot service that hits the common layers — auth, persistence, migrations, observability, tests, container, CI.
+A reference Spring Boot service that hits the common layers. Auth, persistence, migrations, observability, tests, container, CI.
 
 ## Stack
 
@@ -63,6 +63,7 @@ spring-starter/
             ├── greeting/GreetingControllerIT.java
             └── user/
                 ├── UserServiceTest.java
+                ├── UserControllerSliceTest.java
                 └── UserControllerIT.java
 ```
 
@@ -91,7 +92,7 @@ spring-starter/
 | `CORS_ALLOWED_ORIGINS`    | `http://localhost:3000,http://localhost:5173,http://localhost:8080`  |
 | `RATE_LIMIT_REGISTRATION` | `100` (per-IP, per minute, on POST /api/users)                       |
 | `BCRYPT_STRENGTH`         | `10`                                                                 |
-| `SPRING_PROFILES_ACTIVE`  | unset; set to `prod` for JSON logs and tighter actuator              |
+| `SPRING_PROFILES_ACTIVE`  | unset. Set to `prod` for JSON logs and tighter actuator              |
 
 ## Running locally
 
@@ -130,7 +131,7 @@ Or with the included Dockerfile: `docker build -t starter .`
 ./mvnw test
 ```
 
-`UserServiceTest` runs in milliseconds (Mockito). The two `*IT` classes spin up real Postgres via Testcontainers — Docker must be running.
+Three tiers. `UserServiceTest` is a plain Mockito unit test and runs in milliseconds. `UserControllerSliceTest` loads only the web layer with `@WebMvcTest` and a mocked service. The two `*IT` classes (`UserControllerIT`, `GreetingControllerIT`) spin up real Postgres via Testcontainers, so Docker must be running.
 
 ## Deploying
 
@@ -140,19 +141,25 @@ fly launch
 fly deploy
 ```
 
+On Windows, install flyctl with PowerShell instead.
+
+```powershell
+iwr https://fly.io/install.ps1 -useb | iex
+```
+
 Set the env vars from `.env.example` in your platform's secrets UI.
 
 ## Using this as a template
 
 1. Rename `com.example.starter` and `starter` to your package and project. Search-and-replace covers `pom.xml`, every `package` line, and every `import`.
-2. Replace `V1__create_users_table.sql` with your domain's first migration. Drop the `user/` and `greeting/` packages — they're examples.
+2. Replace `V1__create_users_table.sql` with your domain's first migration. Drop the `user/` and `greeting/` packages. They're examples. Replacing that migration on a database that already ran it will fail Flyway's checksum check, so wipe the `postgres_data` volume first.
 3. Keep `config/`, `common/`, `AdminBootstrap`, and the test setup.
 4. Copy `.env.example` to `.env`, fill in real values.
 5. Rewrite this README for your project.
 
 ## Moving to production
 
-HTTP Basic is in here so you can hit the API with `curl -u` on day one. For production, swap for JWT/OAuth2:
+HTTP Basic is in here so you can hit the API with `curl -u` on day one. For production, swap it for JWT/OAuth2.
 
 1. Add `spring-boot-starter-oauth2-resource-server`.
 2. In `SecurityConfig`, replace `.httpBasic(Customizer.withDefaults())` with `.oauth2ResourceServer(o -> o.jwt(Customizer.withDefaults()))`.
@@ -160,9 +167,9 @@ HTTP Basic is in here so you can hit the API with `curl -u` on day one. For prod
 4. Add a token-issuing endpoint or use your issuer's.
 5. Drop `JpaUserDetailsService` if your issuer owns the user store.
 
-Other gaps to close before going public:
+There are other gaps to close before going public.
 
-- **Distributed rate limiting.** Bucket4j uses in-process buckets — fine for one node. Multi-node needs `bucket4j-redis` or a gateway.
-- **Secrets management.** Source `ADMIN_PASSWORD` and `DATABASE_PASSWORD` from a secrets manager.
-- **`/actuator/prometheus`** is dropped from the public exposure under `prod`. Re-expose it on the management port and scrape it there.
-- **TLS** terminates at your load balancer or reverse proxy — the embedded Tomcat here is HTTP-only.
+- Rate limiting is in-process, which is fine for one node. Multi-node needs distributed buckets via `bucket4j-redis` or a gateway.
+- Source `ADMIN_PASSWORD` and `DATABASE_PASSWORD` from a secrets manager.
+- `/actuator/prometheus` is dropped from the public exposure under `prod`. Re-expose it on the management port and scrape it there.
+- Terminate TLS at your load balancer or reverse proxy. The embedded Tomcat here is HTTP-only.

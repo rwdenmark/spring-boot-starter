@@ -8,8 +8,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
 /**
- * Ensures an ADMIN user exists on first startup so admin-only endpoints are
- * reachable. Reads app.admin.email / app.admin.password (env: ADMIN_EMAIL,
+ * Creates an ADMIN user on first startup if none exists, so admin-only
+ * endpoints are reachable. Reads app.admin.email / app.admin.password (env: ADMIN_EMAIL,
  * ADMIN_PASSWORD). Logs a warning and proceeds if the password is left as
  * the default "changeme".
  */
