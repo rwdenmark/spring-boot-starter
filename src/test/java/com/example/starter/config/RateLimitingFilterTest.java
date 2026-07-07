@@ -70,6 +70,27 @@ class RateLimitingFilterTest {
     }
 
     @Test
+    void registration_underServletContextPath_isStillRateLimited() throws Exception {
+        var filter = filter(1, false);
+
+        // getRequestURI carries the context path, so the filter must strip it
+        // before matching or rate limiting silently turns off.
+        var first = new MockHttpServletRequest("POST", "/starter/api/users");
+        first.setContextPath("/starter");
+        first.setRemoteAddr("10.0.0.1");
+        var firstResponse = new MockHttpServletResponse();
+        filter.doFilter(first, firstResponse, new MockFilterChain());
+        assertThat(firstResponse.getStatus()).isEqualTo(200);
+
+        var second = new MockHttpServletRequest("POST", "/starter/api/users");
+        second.setContextPath("/starter");
+        second.setRemoteAddr("10.0.0.1");
+        var secondResponse = new MockHttpServletResponse();
+        filter.doFilter(second, secondResponse, new MockFilterChain());
+        assertThat(secondResponse.getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS.value());
+    }
+
+    @Test
     void otherEndpoints_areNotRateLimited() throws Exception {
         var filter = filter(1, false);
 

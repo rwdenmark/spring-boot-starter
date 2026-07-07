@@ -6,9 +6,6 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.context.annotation.ComponentScan;
-import org.springframework.context.annotation.FilterType;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -18,7 +15,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.example.starter.config.RateLimitingFilter;
+import com.example.starter.ControllerSliceTest;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -34,8 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * BadCredentialsException-to-401 translation in GlobalExceptionHandler.
  * JwtAuthIT covers the same flow end to end with real tokens.
  */
-@WebMvcTest(controllers = AuthController.class,
-        excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = RateLimitingFilter.class))
+@ControllerSliceTest(AuthController.class)
 @AutoConfigureMockMvc(addFilters = false)
 class AuthControllerSliceTest {
 

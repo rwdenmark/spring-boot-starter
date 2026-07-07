@@ -1,6 +1,7 @@
 package com.example.starter.user;
 
 import com.example.starter.common.DuplicateEmailException;
+import com.example.starter.common.EmailMasker;
 import com.example.starter.common.NotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,7 +31,7 @@ public class UserService {
 
     @Transactional
     public UserResponse create(CreateUserRequest request) {
-        log.info("Creating user with email {}", request.email());
+        log.info("Creating user with email {}", EmailMasker.mask(request.email()));
         var user = new User(
                 request.email(),
                 request.name(),
@@ -38,12 +39,11 @@ public class UserService {
         );
         try {
             var saved = userRepository.save(user);
-            log.info("Created user {} (email {})", saved.getId(), saved.getEmail());
+            log.info("Created user {}", saved.getId());
             return UserResponse.from(saved);
         } catch (DataIntegrityViolationException ex) {
             // Rely on the DB unique constraint rather than a pre-check to avoid races
-            log.warn("Email already in use: {}", request.email());
-            throw new DuplicateEmailException("Email already in use");
+            throw duplicateEmail(request.email());
         }
     }
 
@@ -78,9 +78,15 @@ public class UserService {
             // the catch can map it, not at commit after this method returns.
             return UserResponse.from(userRepository.saveAndFlush(user));
         } catch (DataIntegrityViolationException ex) {
-            log.warn("Email already in use: {}", request.email());
-            throw new DuplicateEmailException("Email already in use");
+            throw duplicateEmail(request.email());
         }
+    }
+
+    // Both create and update funnel the unique-constraint violation through
+    // here so the log line and the API-facing message stay in one place.
+    private DuplicateEmailException duplicateEmail(String email) {
+        log.warn("Email already in use: {}", EmailMasker.mask(email));
+        return new DuplicateEmailException("Email already in use");
     }
 
     // DELETE is role-gated in SecurityConfig. Ownership needs the target row,
@@ -94,7 +100,7 @@ public class UserService {
                 .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority()));
         var email = principalEmail(authentication);
         if (!admin && !target.getEmail().equals(email)) {
-            log.warn("User {} tried to update user {}", email, target.getId());
+            log.warn("User {} tried to update user {}", EmailMasker.mask(email), target.getId());
             throw new AccessDeniedException("You can only update your own account");
         }
     }

@@ -1,9 +1,11 @@
 package com.example.starter.user;
 
+import com.example.starter.common.EmailMasker;
 import com.example.starter.config.AppProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.core.env.Environment;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -39,7 +41,7 @@ class AdminBootstrap implements CommandLineRunner {
     public void run(String... args) {
         var admin = appProperties.admin();
         if (admin == null || admin.email() == null || admin.password() == null) {
-            log.warn("app.admin.email/password not configured; skipping admin bootstrap");
+            log.warn("Skipping admin bootstrap because app.admin.email/password is not configured");
             return;
         }
 
@@ -60,7 +62,14 @@ class AdminBootstrap implements CommandLineRunner {
 
         var user = new User(admin.email(), "Admin", passwordEncoder.encode(admin.password()));
         user.setRole(User.Role.ADMIN);
-        userRepository.save(user);
-        log.info("Bootstrapped ADMIN user {}", admin.email());
+        try {
+            userRepository.save(user);
+            log.info("Bootstrapped ADMIN user {}", EmailMasker.mask(admin.email()));
+        } catch (DataIntegrityViolationException ex) {
+            // Two instances can race past the existence check at boot. The
+            // unique constraint on email fails the second save, which matches
+            // the single-admin intent, so log and move on.
+            log.info("Admin user already exists, another instance bootstrapped it first");
+        }
     }
 }

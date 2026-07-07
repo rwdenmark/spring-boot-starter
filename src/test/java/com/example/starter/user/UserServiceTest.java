@@ -133,7 +133,7 @@ class UserServiceTest {
         var result = userService.update(1L, new UpdateUserRequest("Alice Updated", null));
 
         assertThat(result.name()).isEqualTo("Alice Updated");
-        assertThat(result.email()).isEqualTo("a@b.com"); // unchanged
+        assertThat(result.email()).isEqualTo("a@b.com");
     }
 
     @Test

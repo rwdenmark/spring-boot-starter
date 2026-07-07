@@ -44,7 +44,11 @@ public class RateLimitingFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        return !("POST".equals(request.getMethod()) && "/api/users".equals(request.getRequestURI()));
+        // getRequestURI includes the servlet context path, so strip it before
+        // matching. A raw equals on the URI would silently disable rate
+        // limiting for a deployment under a context path.
+        var path = request.getRequestURI().substring(request.getContextPath().length());
+        return !("POST".equals(request.getMethod()) && "/api/users".equals(path));
     }
 
     @Override

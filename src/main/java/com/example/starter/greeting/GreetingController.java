@@ -11,14 +11,14 @@ import java.util.Map;
 @RequestMapping("/api/greeting")
 public class GreetingController {
 
-    private final AppProperties props;
+    private final AppProperties appProperties;
 
-    public GreetingController(AppProperties props) {
-        this.props = props;
+    public GreetingController(AppProperties appProperties) {
+        this.appProperties = appProperties;
     }
 
     @GetMapping
     public Map<String, String> greet() {
-        return Map.of("message", props.greeting());
+        return Map.of("message", appProperties.greeting());
     }
 }

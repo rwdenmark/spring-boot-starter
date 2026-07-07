@@ -3,21 +3,20 @@ package com.example.starter.user;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.context.annotation.ComponentScan;
-import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.example.starter.ControllerSliceTest;
 import com.example.starter.config.AppProperties;
 import com.example.starter.config.JwtConfig;
-import com.example.starter.config.RateLimitingFilter;
 import com.example.starter.config.SecurityConfig;
+import com.example.starter.greeting.GreetingController;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -25,6 +24,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -34,13 +34,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * so it pins anonymous-request and role behavior without a database or
  * Docker. Authenticated requests use spring-security-test's jwt()
  * post-processor, which injects the token past the decoder the same way the
- * resource-server chain would after validation.
+ * resource-server chain would after validation. {@link GreetingController}
+ * is in the slice too, so the public-endpoint rule is pinned here as well.
  */
-@WebMvcTest(controllers = UserController.class,
-        excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = RateLimitingFilter.class))
+@ControllerSliceTest({UserController.class, GreetingController.class})
 @Import({SecurityConfig.class, JwtConfig.class})
 @EnableConfigurationProperties(AppProperties.class)
-class UserControllerSecurityTest {
+@TestPropertySource(properties = "app.greeting=hello from test")
+class UserControllerSecuritySliceTest {
 
     @Autowired MockMvc mockMvc;
     @MockitoBean UserService userService;
@@ -93,5 +94,12 @@ class UserControllerSecurityTest {
                         .with(jwt().jwt(j -> j.subject("root@example.com"))
                                 .authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))))
                 .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void greeting_withoutToken_isPublic_andReturnsConfiguredMessage() throws Exception {
+        mockMvc.perform(get("/api/greeting"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("hello from test"));
     }
 }

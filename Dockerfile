@@ -2,7 +2,6 @@
 FROM eclipse-temurin:21-jdk-alpine AS build
 WORKDIR /app
 
-# Cache dependencies first (faster rebuilds)
 COPY pom.xml mvnw ./
 COPY .mvn .mvn
 RUN ./mvnw dependency:go-offline -B
@@ -14,7 +13,6 @@ RUN ./mvnw package -DskipTests -B
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
-# Run as non-root
 RUN addgroup -S app && adduser -S app -G app
 USER app
 

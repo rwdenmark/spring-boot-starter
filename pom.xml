@@ -137,6 +137,22 @@
                 </configuration>
             </plugin>
 
+            <!-- Surefire's default includes skip the *IT classes, so failsafe runs them.
+                 ./mvnw test stays fast and ./mvnw verify adds the Testcontainers tests.
+                 The Mockito javaagent argLine is not repeated here because the ITs use no mocks. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
             <!-- Run manually with ./mvnw spotless:apply or ./mvnw spotless:check -->
             <plugin>
                 <groupId>com.diffplug.spotless</groupId>
@@ -145,9 +161,6 @@
                 <configuration>
                     <java>
                         <removeUnusedImports/>
-                        <importOrder>
-                            <order>java,jakarta,javax,org,com,</order>
-                        </importOrder>
                         <trimTrailingWhitespace/>
                         <endWithNewline/>
                     </java>

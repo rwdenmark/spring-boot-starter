@@ -15,7 +15,6 @@ target/
 application-local.yml
 
 README.md
-HELP.md
 requests.http
 .editorconfig
 .github/

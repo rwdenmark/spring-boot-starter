@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -72,6 +73,18 @@ class AdminBootstrapTest {
         bootstrap("admin@example.com", "a-real-secret").run();
 
         verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void run_concurrentBootstrapRace_swallowsUniqueViolation() {
+        when(userRepository.findByEmail("admin@example.com")).thenReturn(Optional.empty());
+        when(passwordEncoder.encode("a-real-secret")).thenReturn("{bcrypt}hashed");
+        // Another instance won the race between the existence check and the save.
+        when(userRepository.save(any(User.class)))
+                .thenThrow(new DataIntegrityViolationException("unique violation"));
+
+        assertThatCode(() -> bootstrap("admin@example.com", "a-real-secret").run())
+                .doesNotThrowAnyException();
     }
 
     @Test

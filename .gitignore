@@ -6,7 +6,6 @@ target/
 .claude/settings.local.json
 .DS_Store
 *.log
-HELP.md
 
 # Don't commit secrets
 .env

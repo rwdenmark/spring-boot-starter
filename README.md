@@ -15,72 +15,22 @@ A reference Spring Boot service that hits the common layers. Auth, persistence, 
 - Virtual threads
 - Testcontainers integration tests
 - Multi-stage Dockerfile (non-root)
-- GitHub Actions CI, Dependabot
-- Spotless (opt-in: `./mvnw spotless:apply`)
+- GitHub Actions CI
+- Spotless, checked in CI, fix locally with `./mvnw spotless:apply`
 
 ## File tour
 
 ```
 spring-starter/
-├── pom.xml
-├── Dockerfile
-├── compose.yml
-├── .env.example
-├── .github/
-│   ├── workflows/ci.yml
-│   └── dependabot.yml
+├── pom.xml           build, dependencies, surefire and failsafe wiring
+├── Dockerfile        multi-stage build, non-root runtime
+├── compose.yml       local Postgres
+├── .env.example      every env var the app reads
+├── .github/          CI workflow
 └── src/
-    ├── main/
-    │   ├── java/com/example/starter/
-    │   │   ├── StarterApplication.java
-    │   │   ├── auth/
-    │   │   │   ├── AuthController.java
-    │   │   │   ├── TokenService.java
-    │   │   │   ├── LoginRequest.java
-    │   │   │   └── TokenResponse.java
-    │   │   ├── config/
-    │   │   │   ├── AppProperties.java
-    │   │   │   ├── SecurityConfig.java
-    │   │   │   ├── JwtConfig.java
-    │   │   │   ├── RequestLoggingConfig.java
-    │   │   │   └── RateLimitingFilter.java
-    │   │   ├── common/
-    │   │   │   ├── NotFoundException.java
-    │   │   │   ├── DuplicateEmailException.java
-    │   │   │   └── GlobalExceptionHandler.java
-    │   │   ├── greeting/
-    │   │   │   └── GreetingController.java
-    │   │   └── user/
-    │   │       ├── User.java
-    │   │       ├── UserRepository.java
-    │   │       ├── CreateUserRequest.java
-    │   │       ├── UpdateUserRequest.java
-    │   │       ├── UserResponse.java
-    │   │       ├── UserService.java
-    │   │       ├── UserController.java
-    │   │       ├── JpaUserDetailsService.java
-    │   │       └── AdminBootstrap.java
-    │   └── resources/
-    │       ├── application.yml
-    │       ├── application-dev.yml
-    │       ├── application-prod.yml
-    │       └── db/migration/V1__create_users_table.sql
-    └── test/
-        └── java/com/example/starter/
-            ├── auth/
-            │   ├── TokenServiceTest.java
-            │   └── AuthControllerSliceTest.java
-            ├── config/
-            │   ├── JwtConfigTest.java
-            │   └── RateLimitingFilterTest.java
-            ├── greeting/GreetingControllerIT.java
-            └── user/
-                ├── UserServiceTest.java
-                ├── AdminBootstrapTest.java
-                ├── UserControllerSliceTest.java
-                ├── UserControllerSecurityTest.java
-                ├── UserControllerIT.java
-                └── JwtAuthIT.java
+    ├── main/java/com/example/starter/   auth, config, common, greeting, user
+    ├── main/resources/                  application yml files and Flyway migrations
+    └── test/java/com/example/starter/   unit tests, slice tests, *IT Testcontainers tests
 ```
 
 ## API
@@ -162,34 +112,27 @@ curl http://localhost:8080/actuator/health
 
 ```bash
 ./mvnw spring-boot:build-image -DskipTests
-docker run -p 8080:8080 starter:0.0.1-SNAPSHOT
+docker run -p 8080:8080 \
+  -e DATABASE_URL=jdbc:postgresql://host.docker.internal:5432/starter \
+  starter:0.0.1-SNAPSHOT
 ```
 
-Or with the included Dockerfile: `docker build -t starter .`
+Inside the container the default `DATABASE_URL` points at the container itself, so pass one that reaches the compose Postgres, `host.docker.internal` on Docker Desktop or the service name if the container joins the compose network.
+
+The included Dockerfile builds the same image with `docker build -t starter .`
 
 ## Tests
 
 ```bash
-./mvnw test
+./mvnw test     # unit and slice tiers
+./mvnw verify   # adds the Testcontainers integration tests
 ```
 
-Three tiers. `UserServiceTest`, `TokenServiceTest`, `JwtConfigTest`, `AdminBootstrapTest`, and `RateLimitingFilterTest` are plain unit tests and run in milliseconds. `UserControllerSliceTest` and `AuthControllerSliceTest` load only the web layer with `@WebMvcTest` and mocked collaborators, and `UserControllerSecurityTest` does the same with the security filter chain enabled, using spring-security-test's `jwt()` post-processor for authenticated requests. The `*IT` classes (`UserControllerIT`, `JwtAuthIT`, `GreetingControllerIT`) spin up real Postgres via Testcontainers, so Docker must be running. `JwtAuthIT` is the full round trip, login for a real signed token, then list, PATCH ownership, and admin DELETE over the wire.
+Three tiers. `UserServiceTest`, `TokenServiceTest`, `JwtConfigTest`, `AdminBootstrapTest`, `RateLimitingFilterTest`, and `EmailMaskerTest` are plain unit tests and run in milliseconds. `UserControllerSliceTest` and `AuthControllerSliceTest` load only the web layer with `@WebMvcTest` and mocked collaborators, and `UserControllerSecuritySliceTest` does the same with the security filter chain enabled, using spring-security-test's `jwt()` post-processor for authenticated requests. The `*IT` classes (`UserControllerIT`, `JwtAuthIT`) spin up real Postgres via Testcontainers and run under Failsafe in the `verify` phase, so Docker must be running for them. `JwtAuthIT` is the full round trip, login for a real signed token, then list, PATCH ownership, and admin DELETE over the wire.
 
 ## Deploying
 
-```bash
-brew install flyctl
-fly launch
-fly deploy
-```
-
-On Windows, install flyctl with PowerShell instead.
-
-```powershell
-iwr https://fly.io/install.ps1 -useb | iex
-```
-
-Set the env vars from `.env.example` in your platform's secrets UI.
+Any container platform that runs the image works. Build and push the image, then set the env vars from `.env.example` in the platform's secrets UI. On fly.io that is `fly launch` once and `fly deploy` after.
 
 ## Using this as a template
 
